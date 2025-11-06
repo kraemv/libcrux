@@ -15,7 +15,7 @@ pub enum Error {
 }
 
 /// An Ed25519 public, verification key
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, Debug)]
 #[cfg_attr(feature = "codec", derive(TlsSerialize, TlsDeserialize, TlsSize))]
 pub struct VerificationKey {
     value: [u8; 32],

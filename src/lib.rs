@@ -16,3 +16,6 @@ use alloc as std;
 pub mod algorithms;
 pub mod primitives;
 pub mod protocols;
+
+// Key management
+pub(crate) mod keys;
