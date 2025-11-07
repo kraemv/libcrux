@@ -10,7 +10,7 @@ use super::Error;
 use crate::DigestAlgorithm;
 
 /// A P-256 Signature
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Signature {
     r: [u8; 32],
     s: [u8; 32],
