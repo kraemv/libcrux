@@ -1,5 +1,6 @@
 pub use libcrux_ecdsa::p256::uncompressed_to_coordinates;
 pub use libcrux_ecdsa::p256::compressed_to_coordinates;
+pub use libcrux_ecdsa::p256::secret_to_public;
 pub use libcrux_ecdsa::p256::sign;
 
 pub use libcrux_ecdsa::DigestAlgorithm;

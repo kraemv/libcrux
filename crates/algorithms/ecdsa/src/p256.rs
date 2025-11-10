@@ -1,7 +1,7 @@
 //! ECDSA on P-256
 
 use libcrux_p256::{
-    compressed_to_raw, ecdsa_sign_p256_sha2, ecdsa_sign_p256_sha384, ecdsa_sign_p256_sha512,
+    compressed_to_raw, dh_initiator, ecdsa_sign_p256_sha2, ecdsa_sign_p256_sha384, ecdsa_sign_p256_sha512,
     ecdsa_verif_p256_sha2, ecdsa_verif_p256_sha384, ecdsa_verif_p256_sha512, uncompressed_to_raw,
     validate_private_key, validate_public_key,
 };
@@ -133,6 +133,25 @@ pub fn compressed_to_coordinates(point: &[u8]) -> Result<[u8; 64], Error> {
         }
     } else {
         Err(Error::NoUnCompressedPoint)
+    }
+}
+
+/// Compute the public key, corresponding to the private key `s`.
+pub fn secret_to_public(s: &PrivateKey) -> Result<PublicKey, Error> {
+    _secret_to_public(s).map(PublicKey)
+}
+
+/// Compute the public key for the provided `private_key`.
+///
+/// Returns the 64 bytes public key.
+pub fn _secret_to_public(s: impl AsRef<[u8; 32]>) -> Result<[u8; 64], Error> {
+    validate_scalar(&s)?;
+
+    let mut out = [0u8; 64];
+    if dh_initiator(&mut out, s.as_ref()) {
+        Ok(out)
+    } else {
+        Err(Error::InvalidScalar)
     }
 }
 

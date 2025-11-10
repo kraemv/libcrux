@@ -21,7 +21,7 @@ pub mod hacl {
 }
 
 /// The hash algorithm used for signing or verifying.
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DigestAlgorithm {
     /// The SHA256 hash algorithm
     Sha2_256,
