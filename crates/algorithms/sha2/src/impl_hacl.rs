@@ -3,7 +3,7 @@ use libcrux_hacl_rs::prelude::*;
 use libcrux_traits::Digest;
 
 /// The different Sha2 algorithms.
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Algorithm {
     Sha224,
     Sha256,
