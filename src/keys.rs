@@ -1,14 +1,16 @@
 use crate::std::vec::Vec;
-use std::sync::LazyLock;
+use std::sync::{LazyLock, RwLock};
 use crate::signature::{Error, Signature, SigningKey, SigningKeyType, SigInfo};
 use rand::CryptoRng;
 
-enum SecretKey{
+static KEY_STORE: LazyLock<RwLock<KeyStore>> = LazyLock::new(|| RwLock::new(KeyStore::new()));
+
+pub enum SecretKey{
     SigningKey(SigningKeyType),
     // KxStaticKey(Box<dyn KxStaticKey>),
 }
 
-struct KeyStoreEntry {
+pub struct KeyStoreEntry {
     id: u32,
     key: SecretKey,
 }
@@ -18,7 +20,7 @@ struct KeyStore {
 }
 
 impl KeyStore {
-    pub fn new() -> Self{
+    fn new() -> Self{
         KeyStore{entries: Vec::new()}
     }
     
@@ -37,4 +39,12 @@ impl KeyStore {
     }
 }
 
-static KEY_STORE: LazyLock<KeyStore> = LazyLock::new(|| KeyStore::new());
+pub fn sign_for_id(id: u32, message: &[u8], params: Option<SigInfo>, rng: &mut impl CryptoRng) -> Result<Signature, Error>{
+    let store = KEY_STORE.read().unwrap();
+    store.sign_for_id(id, message, params, rng)
+}
+
+pub fn add_entry(entry: KeyStoreEntry) {
+    let mut store = KEY_STORE.write().unwrap();
+    store.add_entry(entry)
+}
