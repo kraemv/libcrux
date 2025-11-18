@@ -98,9 +98,10 @@ const E: [u8; 3] = [1, 0, 1];
 
 fn hacl_hash_alg(alg: crate::DigestAlgorithm) -> libcrux_hacl_rs::streaming_types::hash_alg {
     match alg {
-        crate::DigestAlgorithm::Sha2_256 => libcrux_hacl_rs::streaming_types::hash_alg::SHA2_256,
-        crate::DigestAlgorithm::Sha2_384 => libcrux_hacl_rs::streaming_types::hash_alg::SHA2_384,
-        crate::DigestAlgorithm::Sha2_512 => libcrux_hacl_rs::streaming_types::hash_alg::SHA2_512,
+        crate::DigestAlgorithm::Sha224 => todo!(),
+        crate::DigestAlgorithm::Sha256 => libcrux_hacl_rs::streaming_types::hash_alg::SHA2_256,
+        crate::DigestAlgorithm::Sha384 => libcrux_hacl_rs::streaming_types::hash_alg::SHA2_384,
+        crate::DigestAlgorithm::Sha512 => libcrux_hacl_rs::streaming_types::hash_alg::SHA2_512,
     }
 }
 

@@ -21,28 +21,7 @@ pub mod hacl {
 }
 
 /// The hash algorithm used for signing or verifying.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DigestAlgorithm {
-    /// The SHA256 hash algorithm
-    Sha2_256,
-
-    /// The SHA384 hash algorithm
-    Sha2_384,
-
-    /// The SHA512 hash algorithm
-    Sha2_512,
-}
-
-impl DigestAlgorithm {
-    // using u8 so it can be safely coerced into any uint type
-    const fn hash_len(&self) -> u8 {
-        match self {
-            DigestAlgorithm::Sha2_256 => 32,
-            DigestAlgorithm::Sha2_384 => 48,
-            DigestAlgorithm::Sha2_512 => 64,
-        }
-    }
-}
+pub type DigestAlgorithm = libcrux_sha2::Algorithm;
 
 /// Represents errors that occurred during signing or verifying.
 #[derive(Debug, PartialEq, Eq)]
