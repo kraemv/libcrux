@@ -15,6 +15,12 @@ pub struct KeyStoreEntry {
     key: SecretKey,
 }
 
+impl KeyStoreEntry {
+    pub fn new(id: u32, key: SecretKey) -> Self {
+        Self{id: id, key: key}
+    }
+}
+
 struct KeyStore {
     entries: Vec<KeyStoreEntry>,
 }
