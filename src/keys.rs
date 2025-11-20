@@ -11,12 +11,12 @@ pub enum SecretKey{
 }
 
 pub struct KeyStoreEntry {
-    id: u32,
+    id: u128,
     key: SecretKey,
 }
 
 impl KeyStoreEntry {
-    pub fn new(id: u32, key: SecretKey) -> Self {
+    pub fn new(id: u128, key: SecretKey) -> Self {
         Self{id: id, key: key}
     }
 }
@@ -30,7 +30,7 @@ impl KeyStore {
         KeyStore{entries: Vec::new()}
     }
     
-    fn sign_for_id(&self, id: u32, message: &[u8], params: Option<SigInfo>, rng: &mut impl CryptoRng) -> Result<Signature, Error> {
+    fn sign_for_id(&self, id: u128, message: &[u8], params: Option<SigInfo>, rng: &mut impl CryptoRng) -> Result<Signature, Error> {
         self.entries
             .iter()
             .find_map(|entry| match &entry.key {
@@ -45,7 +45,7 @@ impl KeyStore {
     }
 }
 
-pub fn sign_for_id(id: u32, message: &[u8], params: Option<SigInfo>, rng: &mut impl CryptoRng) -> Result<Signature, Error>{
+pub fn sign_for_id(id: u128, message: &[u8], params: Option<SigInfo>, rng: &mut impl CryptoRng) -> Result<Signature, Error>{
     let store = KEY_STORE.read().unwrap();
     store.sign_for_id(id, message, params, rng)
 }
