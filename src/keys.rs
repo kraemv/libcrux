@@ -7,7 +7,7 @@ static KEY_STORE: LazyLock<RwLock<KeyStore>> = LazyLock::new(|| RwLock::new(KeyS
 
 pub enum SecretKey{
     SigningKey(SigningKeyType),
-    // KxStaticKey(Box<dyn KxStaticKey>),
+    // SessionTicket(SessionTicket),
 }
 
 pub struct KeyStoreEntry {
