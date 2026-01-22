@@ -164,6 +164,15 @@ impl VerificationKey for VerificationKeyType {
     }
 }
 
+impl AsRef<[u8]> for VerificationKeyType {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            VerificationKeyType::EcDsaP256(key) => key.val.as_ref(),
+            VerificationKeyType::Ed25519(key) => key.as_ref(),
+        }
+    }
+}
+
 /// A [`Algorithm::Ed25519`] Signature
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ed25519Signature {

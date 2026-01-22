@@ -1,4 +1,4 @@
-use crate::signature::{Error, Signature, SigningKey, SigningKeyType};
+use crate::signature::{Error, Signature, SigningKey, SigningKeyType, VerificationKeyType};
 use crate::RNG;
 use libcrux_kmac as kmac;
 use rand::RngCore;
@@ -76,7 +76,7 @@ pub fn add_entry(entry: KeyStoreEntry) {
     store.add_entry(entry)
 }
 
-pub fn add_key(key: SecretKey) {
+pub fn add_key(key: SecretKey) -> ([u8; 32], VerificationKeyType){
     let bytes: &[u8] = match &key {
         SecretKey::SigningKey(sig_key) => sig_key.as_ref(),
     };
@@ -89,8 +89,14 @@ pub fn add_key(key: SecretKey) {
     let tag = kmac::kmac_128(&mut tag, &store.root_key, bytes, customization)
         .try_into()
         .unwrap();
-
+    
+    let pk: VerificationKeyType = match &key {
+        SecretKey::SigningKey(sig_key) => sig_key.to_public().expect("Public Key creation failed"),
+    };
+    
     let mut store = KEY_STORE.write().unwrap();
     let entry = KeyStoreEntry::new(tag, key);
-    store.add_entry(entry)
+    store.add_entry(entry);
+    
+    (tag, pk) 
 }
