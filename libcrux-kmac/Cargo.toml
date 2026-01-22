@@ -1,0 +1,22 @@
+[package]
+name = "libcrux-kmac"
+version = "0.0.4"
+description = "Libcrux KMAC implementation"
+readme = "Readme.md"
+
+authors.workspace = true
+license.workspace = true
+homepage.workspace = true
+edition.workspace = true
+repository.workspace = true
+
+[lib]
+path = "src/kmac.rs"
+
+[features]
+expose-hacl = []
+
+[dependencies]
+libcrux-hacl-rs = { version = "=0.0.4", path = "../hacl-rs/" }
+libcrux-sha3 = { version = "=0.0.4", path = "../libcrux-sha3" }
+libcrux-macros = { version = "=0.0.3", path = "../macros" }
