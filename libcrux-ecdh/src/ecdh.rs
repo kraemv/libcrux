@@ -72,8 +72,8 @@ pub mod p256 {
 pub use p256_internal::{
     generate_secret as p256_generate_secret, key_gen as p256_key_gen,
     secret_to_public as p256_secret_to_public, validate_point as p256_validate_point,
-    validate_scalar as p256_validate_scalar,PrivateKey as P256PrivateKey, PublicKey as P256PublicKey,
-    SharedSecret as P256SharedSecret,
+    validate_scalar as p256_validate_scalar, PrivateKey as P256PrivateKey,
+    PublicKey as P256PublicKey, SharedSecret as P256SharedSecret,
 };
 
 /// Derive the ECDH shared secret.

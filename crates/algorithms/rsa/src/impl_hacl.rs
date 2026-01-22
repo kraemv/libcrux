@@ -417,7 +417,7 @@ mod tests {
         let msg = [7, 8, 9, 10];
         let mut signature = [0u8; 256];
         sign_2048(
-            crate::DigestAlgorithm::Sha2_256,
+            crate::DigestAlgorithm::Sha256,
             &sk,
             &msg,
             &salt,
@@ -425,7 +425,7 @@ mod tests {
         )
         .unwrap();
         verify_2048(
-            crate::DigestAlgorithm::Sha2_256,
+            crate::DigestAlgorithm::Sha256,
             &pk,
             &msg,
             salt.len() as u32,

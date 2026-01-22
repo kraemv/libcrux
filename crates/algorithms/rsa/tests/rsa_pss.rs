@@ -48,10 +48,10 @@ fn self_test_rsa_pss_varlen() {
     let salt = [1, 2, 3, 4, 5];
     let msg = [7, 8, 9, 10];
     let mut signature = [0u8; 256];
-    sign_varlen(DigestAlgorithm::Sha2_256, &sk, &msg, &salt, &mut signature).unwrap();
+    sign_varlen(DigestAlgorithm::Sha256, &sk, &msg, &salt, &mut signature).unwrap();
     eprintln!("signature: {:x?}", signature);
     verify_varlen(
-        DigestAlgorithm::Sha2_256,
+        DigestAlgorithm::Sha256,
         &pk,
         &msg,
         salt.len() as u32,
@@ -62,7 +62,7 @@ fn self_test_rsa_pss_varlen() {
     // test the variable length signing
     let mut signature = [0u8; 257];
     sign_varlen(
-        DigestAlgorithm::Sha2_256,
+        DigestAlgorithm::Sha256,
         &sk,
         &msg,
         &salt,
@@ -70,7 +70,7 @@ fn self_test_rsa_pss_varlen() {
     )
     .unwrap();
     verify_varlen(
-        DigestAlgorithm::Sha2_256,
+        DigestAlgorithm::Sha256,
         &pk,
         &msg,
         salt.len() as u32,
@@ -96,10 +96,10 @@ fn self_test_rsa_pss() {
     let salt = [1, 2, 3, 4, 5];
     let msg = [7, 8, 9, 10];
     let mut signature = [0u8; 256];
-    sign_2048(DigestAlgorithm::Sha2_256, &sk, &msg, &salt, &mut signature).unwrap();
+    sign_2048(DigestAlgorithm::Sha256, &sk, &msg, &salt, &mut signature).unwrap();
     eprintln!("signature: {:x?}", signature);
     verify_2048(
-        DigestAlgorithm::Sha2_256,
+        DigestAlgorithm::Sha256,
         &pk,
         &msg,
         salt.len() as u32,
@@ -110,7 +110,7 @@ fn self_test_rsa_pss() {
     // test the variable length signing
     let mut signature = [0u8; 257];
     sign(
-        DigestAlgorithm::Sha2_256,
+        DigestAlgorithm::Sha256,
         &sk.as_var_len(),
         &msg,
         &salt,
@@ -118,7 +118,7 @@ fn self_test_rsa_pss() {
     )
     .unwrap();
     verify(
-        DigestAlgorithm::Sha2_256,
+        DigestAlgorithm::Sha256,
         &pk.as_var_len(),
         &msg,
         salt.len() as u32,
@@ -129,7 +129,7 @@ fn self_test_rsa_pss() {
     // test the variable length signing fails if the length is wrong
     let mut signature = [0u8; 257];
     let err = sign(
-        DigestAlgorithm::Sha2_256,
+        DigestAlgorithm::Sha256,
         &sk.as_var_len(),
         &msg,
         &salt,
@@ -192,7 +192,7 @@ fn wycheproof_single_test() {
         0x03, 0xcb, 0x29, 0x10, 0xdd, 0x70, 0x67, 0x2b, 0xbf, 0xb6, 0x2e, 0xa4, 0xea, 0xad, 0x72,
         0x5c,
     ];
-    verify_2048(DigestAlgorithm::Sha2_256, &pk, &msg, 0, &signature)
+    verify_2048(DigestAlgorithm::Sha256, &pk, &msg, 0, &signature)
         .expect("Error verifying signature");
 
     let msg = [0x33, 0x32, 0x32, 0x32, 0x30, 0x34, 0x31, 0x30, 0x34, 0x36];
@@ -216,7 +216,7 @@ fn wycheproof_single_test() {
         0xbc, 0xa4, 0x68, 0xf9, 0x3d, 0x3f, 0x13, 0x74, 0x95, 0x57, 0xb7, 0x01, 0x29, 0xef, 0x95,
         0xe5,
     ];
-    verify_2048(DigestAlgorithm::Sha2_256, &pk, &msg, 32, &signature)
+    verify_2048(DigestAlgorithm::Sha256, &pk, &msg, 32, &signature)
         .expect("Error verifying signature");
 }
 
@@ -282,9 +282,9 @@ fn run_wycheproof() {
             let pk = VarLenPublicKey::try_from(n).unwrap();
 
             let hash_algorithm = match &test_group.hash {
-                wycheproof::HashFunction::Sha2_256 => DigestAlgorithm::Sha2_256,
-                wycheproof::HashFunction::Sha2_384 => DigestAlgorithm::Sha2_384,
-                wycheproof::HashFunction::Sha2_512 => DigestAlgorithm::Sha2_512,
+                wycheproof::HashFunction::Sha2_256 => DigestAlgorithm::Sha256,
+                wycheproof::HashFunction::Sha2_384 => DigestAlgorithm::Sha384,
+                wycheproof::HashFunction::Sha2_512 => DigestAlgorithm::Sha512,
                 _ => panic!("Unknown hash algorithm {:?}", test_group.hash),
             };
             for (i, test) in test_group.tests.into_iter().enumerate() {
