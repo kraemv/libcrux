@@ -5,7 +5,7 @@ use rand::RngCore;
 use std::collections::HashMap;
 use std::sync::{LazyLock, RwLock};
 
-static KEY_STORE: LazyLock<RwLock<KeyStore>> = LazyLock::new(|| RwLock::new(KeyStore::new()));
+static KEY_STORE: LazyLock<KeyStore> = LazyLock::new(|| KeyStore::new());
 
 pub enum SecretKey {
     SigningKey(SigningKeyType),
@@ -40,7 +40,7 @@ impl KeyStoreEntry {
 
 struct KeyStore {
     root_key: [u8; 32],
-    entries: HashMap<[u8; 32], KeyStoreEntry>,
+    entries: RwLock<HashMap<[u8; 32], KeyStoreEntry>>,
 }
 
 impl KeyStore {
@@ -49,31 +49,34 @@ impl KeyStore {
         RNG.write().unwrap().fill_bytes(&mut root_key);
         KeyStore {
             root_key: root_key,
-            entries: HashMap::new(),
+            entries: RwLock::new(HashMap::new()),
         }
     }
 
     fn sign_for_id(&self, id: [u8; 32], message: &[u8]) -> Result<Signature, Error> {
         self.entries
+            .read()
+            .unwrap()
             .get(&id)
             .ok_or(Error::InvalidKey)?
             .get_key()
             .sign(message)
     }
 
-    fn add_entry(&mut self, entry: KeyStoreEntry) {
-        self.entries.insert(entry.id, entry);
+    fn add_entry(&self, entry: KeyStoreEntry) {
+        self.entries
+            .write()
+            .unwrap()
+            .insert(entry.id, entry);
     }
 }
 
 pub fn sign_for_id(id: [u8; 32], message: &[u8]) -> Result<Signature, Error> {
-    let store = KEY_STORE.read().unwrap();
-    store.sign_for_id(id, message)
+    KEY_STORE.sign_for_id(id, message)
 }
 
 pub fn add_entry(entry: KeyStoreEntry) {
-    let mut store = KEY_STORE.write().unwrap();
-    store.add_entry(entry)
+    KEY_STORE.add_entry(entry);
 }
 
 pub fn add_key(key: SecretKey) -> ([u8; 32], VerificationKeyType){
@@ -85,8 +88,7 @@ pub fn add_key(key: SecretKey) -> ([u8; 32], VerificationKeyType){
         SecretKey::SigningKey(SigningKeyType::Ed25519(_)) => b"Ed25519Key",
     };
     let mut tag = [0u8; 32];
-    let store = KEY_STORE.read().unwrap();
-    let tag = kmac::kmac_128(&mut tag, &store.root_key, bytes, customization)
+    let tag = kmac::kmac_128(&mut tag, &KEY_STORE.root_key, bytes, customization)
         .try_into()
         .unwrap();
     
@@ -94,9 +96,8 @@ pub fn add_key(key: SecretKey) -> ([u8; 32], VerificationKeyType){
         SecretKey::SigningKey(sig_key) => sig_key.to_public().expect("Public Key creation failed"),
     };
     
-    let mut store = KEY_STORE.write().unwrap();
     let entry = KeyStoreEntry::new(tag, key);
-    store.add_entry(entry);
+    KEY_STORE.add_entry(entry);
     
     (tag, pk) 
 }
