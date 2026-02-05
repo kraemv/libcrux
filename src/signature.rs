@@ -88,13 +88,13 @@ pub enum Algorithm {
 
 impl EcDsaP256PrivKey {
     pub fn new(val: EcDsaP256PrivateKey, alg: DigestAlgorithm) -> Self {
-        Self { val: val, alg: alg }
+        Self { val, alg }
     }
 }
 
 impl EcDsaP256PubKey {
     pub fn new(val: EcDsaP256PublicKey, alg: DigestAlgorithm) -> Self {
-        Self { val: val, alg: alg }
+        Self { val, alg }
     }
 }
 
