@@ -6,7 +6,7 @@
 use crate::std::vec::Vec;
 use core::fmt::Debug;
 
-use crate::hacl::{self, ecdsa, ed25519};
+use crate::algorithms::{ecdsa, ed25519};
 use rand::CryptoRng;
 
 pub use ecdsa::p256::{
@@ -200,10 +200,6 @@ impl Ed25519Signature {
     }
 }
 
-fn into_signing_error(_e: impl Into<hacl::Error>) -> Error {
-    Error::SigningError
-}
-
 impl SigningKey for EcDsaP256PrivKey {
     type PublicKey = EcDsaP256PubKey;
 
@@ -237,7 +233,7 @@ impl SigningKey for Ed25519PrivateKey {
 
     // A signing key can sign given a message and extra paramters
     fn sign(&self, payload: &[u8], _rng: &mut impl CryptoRng) -> Result<Signature, Error> {
-        let signature = ed25519::sign(payload, self.as_ref()).map_err(into_signing_error)?;
+        let signature = ed25519::sign(payload, self.as_ref()).map_err(|_| Error::SigningError)?;
         Ok(Signature::Ed25519(Ed25519Signature::from_bytes(signature)))
     }
 
