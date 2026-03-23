@@ -4,10 +4,9 @@ use base64ct::{Base64, Encoding};
 use libcrux_kmac as kmac;
 use std::format;
 use std::fs;
-use std::env::var;
 use std::{path::Path};
 use std::collections::HashMap;
-use std::string::String;
+use std::string::{String};
 use std::sync::{LazyLock, RwLock};
 use std::fmt::Write as fmtWrite;
 
@@ -59,10 +58,7 @@ struct KeyStore {
 
 impl KeyStore {
     fn from_disk() -> Result<Self, Error> {
-        let agent_path = var("XDG_CONFIG_HOME")
-            .or_else(|_| var("HOME")
-                .map(|home|format!("{}/Documents/agent", home)))
-            .expect("Environment variable HOME undefined");
+        let agent_path = format!("{}/agent", env!("HOME"));
         let agent_path = Path::new(&agent_path);
         let root_file = agent_path.join("root_file");
 

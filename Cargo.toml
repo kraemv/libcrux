@@ -213,10 +213,6 @@ libcrux-p256.workspace = true
 libcrux-rsa.workspace = true
 libcrux-sha2.workspace = true
 libcrux-sha3.workspace = true
-libcrux-ed25519.workspace = true
-libcrux-ecdh.workspace = true
-libcrux-rsa.workspace = true
-libcrux-kem.workspace = true
 
 # Protocols
 libcrux-psq.workspace = true

@@ -19,9 +19,11 @@ use rand_chacha::*;
 pub mod algorithms;
 pub mod primitives;
 pub mod protocols;
+pub mod signature;
 
 // Key management
 pub(crate) mod keys;
+pub use keys::{add_entry, add_key, sign_for_id, KeyStoreEntry, SecretKey};
 
 /*
 Desired primitives / functionalities:
