@@ -1,0 +1,22 @@
+[package]
+name = "agent"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+homepage.workspace = true
+edition.workspace = true
+repository.workspace = true
+readme.workspace = true
+
+[dependencies]
+ipc-channel = "0.21.0"
+rand = { version = "0.9" }
+rand_chacha = "0.9.0"
+
+agent_lib.workspace = true
+libcrux-ecdsa.workspace = true
+libcrux-ed25519.workspace = true
+libcrux-kmac.workspace = true
+libcrux-sha2.workspace = true
+libc = "0.2.183"
+zerocopy = {version="0.8.47", features = ["derive", "std"]}

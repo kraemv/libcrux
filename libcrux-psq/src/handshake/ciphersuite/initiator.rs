@@ -75,7 +75,7 @@ impl<'a> SigningKeyPair<'a> {
         match self {
             SigningKeyPair::Ed25519(signing_key, _) => {
                 let sig = libcrux_ed25519::sign(&payload, signing_key.as_ref())?;
-                Ok(Signature::Ed25519(sig))
+                Ok(Signature::Ed25519(Box::new(sig)))
             }
             SigningKeyPair::MlDsa65(mldsasigning_key, _) => {
                 let mut randomness = [0u8; libcrux_ml_dsa::SIGNING_RANDOMNESS_SIZE];

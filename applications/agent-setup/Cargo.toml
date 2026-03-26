@@ -1,0 +1,18 @@
+[package]
+name = "agent-setup"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+homepage.workspace = true
+edition.workspace = true
+repository.workspace = true
+readme.workspace = true
+
+[dependencies]
+
+base64ct = "1.8.3"
+ipc-channel = "0.21.0"
+rand = { version = "0.9" }
+zerocopy = {version="0.8.47", features = ["derive", "std"]}
+
+agent_lib.workspace = true

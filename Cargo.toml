@@ -33,6 +33,9 @@ exclude = [
 
 [workspace]
 members = [
+    "applications/agent",
+    "applications/agent_lib",
+    "applications/agent-setup",
     "benchmarks",
     "cavp",
     "crates/algorithms/aesgcm",
@@ -69,7 +72,8 @@ members = [
     "libcrux-ml-kem",
     "libcrux-ml-kem/fuzz",
     "libcrux-psq",
-    "traits",
+    "primitive_api",
+    "traits", "applications/application_lib",
 ]
 resolver = "2"
 
@@ -86,6 +90,7 @@ readme = "Readme.md"
 allow-branch = ["main"]
 
 [workspace.dependencies]
+agent_lib = {path = "applications/agent_lib"}
 hax-lib = { version = "=0.3.6" }
 libcrux-aead = { version = "=0.0.7", path = "crates/primitives/aead" }
 libcrux-aesgcm = { version = "=0.0.7", path = "crates/algorithms/aesgcm" }
@@ -220,9 +225,6 @@ libcrux-psq.workspace = true
 # WASM API
 wasm-bindgen = { version = "0.2.87", optional = true }
 
-rand = { version = "0.9" }
-rand_chacha = "0.9.0"
-base64ct = "1.8.3"
 
 [build-dependencies]
 libcrux-platform = { version = "=0.0.3", path = "crates/sys/platform" }
