@@ -63,6 +63,30 @@ impl AsRef<[u8; 32]> for SigningKey {
     }
 }
 
+#[cfg_attr(feature = "codec", derive(TlsSerialize, TlsDeserialize, TlsSize))]
+/// An Ed25519 signature
+pub struct Signature {
+    value: [u8; 64],
+}
+
+impl Signature {
+    /// Get the raw bytes
+    pub fn into_bytes(self) -> [u8; 64] {
+        self.value
+    }
+
+    /// Build a new signing key
+    pub fn from_bytes(value: [u8; 64]) -> Self {
+        Self { value }
+    }
+}
+
+impl AsRef<[u8; 64]> for Signature {
+    fn as_ref(&self) -> &[u8; 64] {
+        &self.value
+    }
+}
+
 /// The hacl implementation requires that
 /// - the private key is a 32 byte buffer
 /// - the signature is a 64 byte buffer,
@@ -72,7 +96,7 @@ impl AsRef<[u8; 32]> for SigningKey {
 /// This has the caveat that `payload_len` must be <= u32::MAX, so we return an error if that is
 /// not the case.
 #[inline(always)]
-pub fn sign(payload: &[u8], private_key: &[u8; 32]) -> Result<[u8; 64], Error> {
+pub fn sign(payload: &[u8], private_key: &[u8; 32]) -> Result<Signature, Error> {
     let mut signature = [0u8; 64];
     crate::hacl::ed25519::sign(
         &mut signature,
@@ -81,7 +105,7 @@ pub fn sign(payload: &[u8], private_key: &[u8; 32]) -> Result<[u8; 64], Error> {
         payload,
     );
 
-    Ok(signature)
+    Ok(Signature::from_bytes(signature))
 }
 
 /// The hacl implementation requires that
@@ -93,12 +117,12 @@ pub fn sign(payload: &[u8], private_key: &[u8; 32]) -> Result<[u8; 64], Error> {
 /// This has the caveat that `payload_len` must be <= u32::MAX, so we return an error if that is
 /// not the case.
 #[inline(always)]
-pub fn verify(payload: &[u8], public_key: &[u8; 32], signature: &[u8; 64]) -> Result<(), Error> {
+pub fn verify(payload: &[u8], public_key: &[u8; 32], signature: &Signature) -> Result<(), Error> {
     if crate::hacl::ed25519::verify(
         public_key,
         payload.len().try_into().map_err(|_| Error::SigningError)?,
         payload,
-        signature,
+        signature.as_ref(),
     ) {
         Ok(())
     } else {

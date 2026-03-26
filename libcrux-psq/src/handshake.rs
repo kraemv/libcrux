@@ -253,7 +253,7 @@ pub(super) fn derive_k1_sig(
 
     // XXX: This is not great.
     let signature_vec = match signature {
-        Signature::Ed25519(sig) => sig.to_vec(),
+        Signature::Ed25519(sig) => sig.deref().as_ref().to_vec(),
         Signature::MlDsa65(mldsasignature) => mldsasignature.deref().as_ref().to_vec(),
     };
 
