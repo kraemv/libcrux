@@ -1,6 +1,6 @@
 // use crate::signature::{DigestAlgorithm, EcDsaP256PrivKey, EcDsaP256PrivateKey, Error, Signature, SigningKey, SigningKeyType, VerificationKeyType};
 use crate::{Error, RNG};
-use agent_lib::{key_store::KeyStore, signatures::{EcDsaP256Signature, Ed25519Signature}};
+use libcrux_agent::{key_store::KeyStore, signatures::{EcDsaP256Signature, Ed25519Signature}};
 use std::sync::{LazyLock};
 
 static KEY_STORE: LazyLock<KeyStore> = LazyLock::new(|| KeyStore::from_disk().expect("Failed to load agent"));

@@ -71,7 +71,7 @@ pub struct IPCResponse {
     payload: Vec<u8>,
 }
 
-#[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout)]
+#[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
 #[repr(u8)]
 pub enum InitResult {
     Success(u8),

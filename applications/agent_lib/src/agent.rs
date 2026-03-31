@@ -14,11 +14,15 @@ pub struct Agent {
 }
 
 impl Agent {
-    pub fn connect_agent() -> Result<Self, Error> {
+    pub fn connect_agent(agent_path: String) -> Result<Self, Error> {
+        unsafe {
+            libc::umask(0o007);
+        }
         let (server, name) = IpcOneShotServer::<(IpcBytesSender, IpcBytesReceiver)>::new().map_err(|_| Error::IO)?;
         
-        let proc = Command::new("agent")
+        let proc = Command::new(agent_path)
             .arg(name)
+            .env("TMPDIR", "/tmp/ipcdir")
             .spawn()
             .expect("failed to start bash");
 

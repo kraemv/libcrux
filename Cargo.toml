@@ -36,6 +36,7 @@ members = [
     "applications/agent",
     "applications/agent_lib",
     "applications/agent-setup",
+    "applications/application_lib",
     "benchmarks",
     "cavp",
     "crates/algorithms/aesgcm",
@@ -73,7 +74,7 @@ members = [
     "libcrux-ml-kem/fuzz",
     "libcrux-psq",
     "primitive_api",
-    "traits", "applications/application_lib",
+    "traits",
 ]
 resolver = "2"
 
@@ -90,7 +91,8 @@ readme = "Readme.md"
 allow-branch = ["main"]
 
 [workspace.dependencies]
-agent_lib = {path = "applications/agent_lib"}
+libcrux-agent = {path = "applications/agent_lib"}
+libcrux-agent-application = {path = "applications/application_lib"}
 hax-lib = { version = "=0.3.6" }
 libcrux-aead = { version = "=0.0.7", path = "crates/primitives/aead" }
 libcrux-aesgcm = { version = "=0.0.7", path = "crates/algorithms/aesgcm" }
@@ -194,6 +196,10 @@ hax-lib.workspace = true
 
 # External Cryspen code.
 hpke-rs = { version = "0.5", features = ["libcrux"] }
+
+# Agent
+libcrux-agent.workspace = true
+libcrux-agent-application.workspace = true
 
 # Primitives
 libcrux-aead.workspace = true
