@@ -16,3 +16,5 @@ use alloc as std;
 pub mod algorithms;
 pub mod primitives;
 pub mod protocols;
+
+pub use libcrux_agent as agent;

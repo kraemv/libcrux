@@ -1,8 +1,8 @@
 mod request_handler;
 
-use agent_lib::{Error, messages::IPCSetupRequest};
+use libcrux_agent::{Error, messages::IPCSetupRequest};
 
-use ipc_channel::ipc::*;
+use ipc_channel::{IpcError, ipc::*};
 
 use std::env;
 
@@ -15,7 +15,11 @@ fn main() {
     super_tx.send((tx0, rx1)).unwrap();
 
     loop {
-        let new_request = rx0.recv().unwrap();
+        let new_request = match rx0.recv() {
+            Ok(bytes) => bytes,
+            Err(IpcError::Disconnected) => break,
+            Err(_) => continue,
+        };
         let Ok(new_request) = IPCSetupRequest::try_from(new_request.as_ref()) else {continue;};
         match request_handler::handle_request(&new_request) {
             Ok(response) => tx1.send(response.into_bytes().as_ref()).unwrap(),

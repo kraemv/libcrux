@@ -96,7 +96,8 @@ readme = "Readme.md"
 allow-branch = ["main"]
 
 [workspace.dependencies]
-agent_lib = {path = "applications/agent_lib"}
+libcrux-agent = {path = "applications/agent_lib"}
+libcrux-agent-application = {path = "applications/application_lib"}
 hax-lib = { version = "=0.3.6" }
 libcrux-aead = { version = "=0.0.8", path = "crates/primitives/aead" }
 libcrux-aes = { version = "=0.0.8", path = "crates/algorithms/aes" }
@@ -209,6 +210,10 @@ hax-lib.workspace = true
 
 # External Cryspen code.
 hpke-rs = { version = "0.6", features = ["libcrux"] }
+
+# Agent
+libcrux-agent.workspace = true
+libcrux-agent-application.workspace = true
 
 # Primitives
 libcrux-aead.workspace = true

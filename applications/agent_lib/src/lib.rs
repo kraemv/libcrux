@@ -1,6 +1,6 @@
 use zerocopy::*;
 
-#[derive(Clone, Debug, IntoBytes, TryFromBytes, Immutable, KnownLayout)]
+#[derive(Clone, Debug, IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
 #[repr(u8)]
 pub enum Error {
     DuplicateKey,

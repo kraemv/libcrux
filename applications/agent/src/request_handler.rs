@@ -1,4 +1,4 @@
-use agent_lib::messages::*;
+use libcrux_agent::messages::*;
 use crate::keys::{sign_for_ecdsa_p256_id, sign_for_ed25519_id};
 use crate::Error;
 
