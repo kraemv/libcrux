@@ -10,18 +10,20 @@ pub struct EcDsaP256Signature {
     alg: DigestAlgorithm,
 }
 
-pub struct EcDsaP256PublicKey{
+#[derive(Debug)]
+pub struct EcDsaP256PublicKey {
     key: ecdsa::p256::PublicKey,
     alg: DigestAlgorithm,
 }
 
-pub struct EcDsaP256PrivateKey{
+pub struct EcDsaP256PrivateKey {
     key: ecdsa::p256::PrivateKey,
     alg: DigestAlgorithm,
 }
 
 pub struct Ed25519PrivateKey(ed25519::SigningKey);
 
+#[derive(Clone, Debug)]
 pub struct Ed25519PublicKey(ed25519::VerificationKey);
 
 pub struct Ed25519Signature(ed25519::Signature);
@@ -30,12 +32,12 @@ impl EcDsaP256Signature {
     pub fn new(sig: ecdsa::p256::Signature, alg: DigestAlgorithm) -> Self {
         Self { sig, alg }
     }
-    
+
     pub fn get_signature(&self) -> ecdsa::p256::Signature {
         self.sig
     }
 
-    pub fn get_alg(&self) -> DigestAlgorithm{
+    pub fn get_alg(&self) -> DigestAlgorithm {
         self.alg
     }
 }
@@ -54,15 +56,25 @@ impl EcDsaP256PublicKey {
     }
 }
 
+impl Clone for EcDsaP256PublicKey {
+    fn clone(&self) -> Self {
+        let key = ecdsa::p256::PublicKey::try_from(&self.get_key().0).unwrap();
+        Self { key, alg: self.get_alg() }
+    }
+}
 impl EcDsaP256PrivateKey {
-    pub fn new (key: ecdsa::p256::PrivateKey, alg: DigestAlgorithm) -> Self {
-        Self {key, alg}
+    pub fn new(key: ecdsa::p256::PrivateKey, alg: DigestAlgorithm) -> Self {
+        Self { key, alg }
     }
 
-    pub fn sign(&self, message: &[u8], rng: &mut impl CryptoRng) -> Result<EcDsaP256Signature, Error> {
+    pub fn sign(
+        &self,
+        message: &[u8],
+        rng: &mut impl CryptoRng,
+    ) -> Result<EcDsaP256Signature, Error> {
         let nonce = ecdsa::p256::Nonce::random(rng).map_err(|_| Error::Signing)?;
-        let sig = ecdsa::p256::sign(self.alg, message, &self.key, &nonce)
-            .map_err(|_| Error::Signing)?;
+        let sig =
+            ecdsa::p256::sign(self.alg, message, &self.key, &nonce).map_err(|_| Error::Signing)?;
         Ok(EcDsaP256Signature::new(sig, self.alg))
     }
 
@@ -87,9 +99,18 @@ impl Ed25519Signature {
     pub fn into_bytes(self) -> [u8; 64] {
         self.0.into_bytes()
     }
+
+    pub fn as_bytes(&self) -> &[u8; 64] {
+        self.0.as_ref()
+    }
+
+    pub fn get_signature(&self) -> &ed25519::Signature {
+        &self.0
+    }
 }
+
 impl Ed25519PrivateKey {
-    pub fn new (key: ed25519::SigningKey) -> Self {
+    pub fn new(key: ed25519::SigningKey) -> Self {
         Self(key)
     }
 
@@ -104,15 +125,19 @@ impl Ed25519PrivateKey {
 
     pub fn as_bytes(&self) -> &[u8; 32] {
         self.0.as_ref()
-    }  
+    }
 }
 
 impl Ed25519PublicKey {
-    pub fn new (key: ed25519::VerificationKey) -> Self {
+    pub fn new(key: ed25519::VerificationKey) -> Self {
         Self(key)
     }
-    
+
     pub fn into_bytes(&self) -> [u8; 32] {
         self.0.into_bytes()
+    }
+
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        self.0.as_ref()
     }
 }

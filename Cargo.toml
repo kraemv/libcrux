@@ -119,6 +119,7 @@ libcrux-sha3 = { version = "=0.0.9", path = "crates/algorithms/sha3" }
 libcrux-traits = { version = "=0.0.7", path = "traits" }
 libcrux-kem = { version = "=0.0.8", path = "libcrux-kem" }
 libcrux-ml-dsa = { version = "=0.0.9", path = "libcrux-ml-dsa" }
+libcrux-primitive-api = {path = "primitive_api"}
 libcrux-platform = { version = "=0.0.3", path = "crates/sys/platform" }
 libcrux-psq = { version = "=0.0.9", path = "libcrux-psq" }
 
@@ -214,6 +215,7 @@ hpke-rs = { version = "0.6", features = ["libcrux"] }
 # Agent
 libcrux-agent.workspace = true
 libcrux-agent-application.workspace = true
+libcrux-primitive-api.workspace = true
 
 # Primitives
 libcrux-aead.workspace = true

@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
-use libcrux_ed25519::VerificationKey as Ed25519VerificationKey;
 use libcrux_ed25519::Signature as Ed25519Signature;
+use libcrux_ed25519::VerificationKey as Ed25519VerificationKey;
 use libcrux_kem::{MlKem768Ciphertext, MlKem768PrivateKey, MlKem768PublicKey};
 use libcrux_ml_dsa::ml_dsa_65::{MLDSA65Signature, MLDSA65VerificationKey};
 use libcrux_ml_kem::MlKemSharedSecret;

@@ -4,10 +4,10 @@ mod setup;
 
 // use keys::{add_ecdsa_p256_key, add_ed25519_key, sign_for_ecdsa_p256_id, sign_for_ed25519_id};
 
+use ipc_channel::ipc::*;
 use ipc_channel::IpcError;
 use libcrux_agent::messages;
 use libcrux_agent::Error;
-use ipc_channel::ipc::*;
 use rand::SeedableRng;
 use rand_chacha::*;
 use std::env;
@@ -32,12 +32,12 @@ fn main() {
             Err(IpcError::Disconnected) => break,
             Err(_) => continue,
         };
-        let Ok(new_request) = messages::IPCRequest::try_from(new_request.as_ref()) else {continue;};
+        let Ok(new_request) = messages::IPCRequest::try_from(new_request.as_ref()) else {
+            continue;
+        };
         match request_handler::handle_request(&new_request) {
             Ok(response) => tx1.send(response.into_bytes().as_ref()).unwrap(),
             Err(_) => continue,
         };
     }
-
-
 }

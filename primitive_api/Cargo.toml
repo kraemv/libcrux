@@ -1,5 +1,5 @@
 [package]
-name = "primitive_api"
+name = "libcrux-primitive-api"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -9,3 +9,6 @@ repository.workspace = true
 readme.workspace = true
 
 [dependencies]
+libcrux-agent.workspace = true
+libcrux-ecdsa.workspace = true
+libcrux-ed25519.workspace = true

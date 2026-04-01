@@ -1,19 +1,20 @@
 use base64ct::{Base64, Encoding};
 use rand::rand_core::{OsRng, TryRngCore};
-use std::sync::{LazyLock};
+use std::sync::LazyLock;
 use zerocopy::*;
 
-use libcrux_agent::messages::*;
-use libcrux_agent::key_store::*;
-use libcrux_agent::signatures::*;
 use crate::Error;
+use libcrux_agent::key_store::*;
+use libcrux_agent::messages::*;
+use libcrux_agent::signatures::*;
 
-use std::{fs, path::PathBuf};
 use std::env;
 use std::fmt::Write as fmtWrite;
 use std::io::Write;
+use std::{fs, path::PathBuf};
 
-static KEY_STORE: LazyLock<KeyStore> = LazyLock::new(|| KeyStore::from_disk().expect("Failed to load agent"));
+static KEY_STORE: LazyLock<KeyStore> =
+    LazyLock::new(|| KeyStore::from_disk().expect("Failed to load agent"));
 
 fn encode_hex(bytes: &[u8]) -> String {
     let mut s = String::with_capacity(bytes.len() * 2);
@@ -23,19 +24,18 @@ fn encode_hex(bytes: &[u8]) -> String {
     s
 }
 
-
 pub(crate) fn handle_request(request: &IPCSetupRequest) -> Result<IPCSetupResponse, Error> {
     match request.get_type().get_type() {
         SetupMessageKind::AgentInit => Ok(IPCSetupResponse::from(&InitResult::from(init_agent()))),
         SetupMessageKind::EcDsaP256Key => {
-            let key = EcDsaP256SetupRequest::try_ref_from_bytes(request.get_payload()).map_err(|_| Error::MalformedRequest)?;
-            import_ecdsa_p256_key(key.try_into()?)
-                .map(|res| IPCSetupResponse::from(&res))
+            let key = EcDsaP256SetupRequest::try_ref_from_bytes(request.get_payload())
+                .map_err(|_| Error::MalformedRequest)?;
+            import_ecdsa_p256_key(key.try_into()?).map(|res| IPCSetupResponse::from(&res))
         }
         SetupMessageKind::Ed25519Key => {
-            let key = Ed25519SetupRequest::try_ref_from_bytes(request.get_payload()).map_err(|_| Error::MalformedRequest)?;
-            import_ed25519_key(key.into())
-                .map(|res| IPCSetupResponse::from(&res))
+            let key = Ed25519SetupRequest::try_ref_from_bytes(request.get_payload())
+                .map_err(|_| Error::MalformedRequest)?;
+            import_ed25519_key(key.into()).map(|res| IPCSetupResponse::from(&res))
         }
     }
 }
@@ -67,11 +67,7 @@ fn init_agent() -> Result<(), Error> {
     Ok(())
 }
 
-fn register_key(
-    id: &[u8; 32],
-    key_bytes: &[u8],
-    key_label: &[u8],
-) -> Result<(), Error> {
+fn register_key(id: &[u8; 32], key_bytes: &[u8], key_label: &[u8]) -> Result<(), Error> {
     let (root_file, key_path, key_file, _) = agent_paths(id);
 
     let mut enc_id = [0u8; 44];

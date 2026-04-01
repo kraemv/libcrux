@@ -16,6 +16,6 @@ pub enum Error {
 }
 
 pub mod agent;
-pub mod messages;
 pub mod key_store;
+pub mod messages;
 pub mod signatures;

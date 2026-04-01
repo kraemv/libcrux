@@ -18,3 +18,4 @@ pub mod primitives;
 pub mod protocols;
 
 pub use libcrux_agent as agent;
+pub use libcrux_primitive_api as libcrux;
