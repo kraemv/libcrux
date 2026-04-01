@@ -1,7 +1,6 @@
 use libc::{
-    mlockall, prctl, sigfillset, sigprocmask, MCL_FUTURE,
-    PR_SET_DUMPABLE, PR_SET_PDEATHSIG, PR_SET_SPECULATION_CTRL,
-    PR_SPEC_FORCE_DISABLE, PR_SPEC_STORE_BYPASS, SIGHUP, SIG_BLOCK,
+    mlockall, prctl, sigfillset, sigprocmask, MCL_FUTURE, PR_SET_DUMPABLE, PR_SET_PDEATHSIG,
+    PR_SET_SPECULATION_CTRL, PR_SPEC_FORCE_DISABLE, PR_SPEC_STORE_BYPASS, SIGHUP, SIG_BLOCK,
 };
 
 pub(crate) fn do_setup() {

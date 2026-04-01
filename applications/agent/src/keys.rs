@@ -1,9 +1,13 @@
 // use crate::signature::{DigestAlgorithm, EcDsaP256PrivKey, EcDsaP256PrivateKey, Error, Signature, SigningKey, SigningKeyType, VerificationKeyType};
 use crate::{Error, RNG};
-use libcrux_agent::{key_store::KeyStore, signatures::{EcDsaP256Signature, Ed25519Signature}};
-use std::sync::{LazyLock};
+use libcrux_agent::{
+    key_store::KeyStore,
+    signatures::{EcDsaP256Signature, Ed25519Signature},
+};
+use std::sync::LazyLock;
 
-static KEY_STORE: LazyLock<KeyStore> = LazyLock::new(|| KeyStore::from_disk().expect("Failed to load agent"));
+static KEY_STORE: LazyLock<KeyStore> =
+    LazyLock::new(|| KeyStore::from_disk().expect("Failed to load agent"));
 
 pub fn sign_for_ecdsa_p256_id(id: [u8; 32], message: &[u8]) -> Result<EcDsaP256Signature, Error> {
     KEY_STORE.sign_for_ecdsa_p256_id(id, message, &mut RNG.write().unwrap())
