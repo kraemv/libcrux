@@ -5,12 +5,11 @@ use crate::signatures::{EcDsaP256PrivateKey, EcDsaP256PublicKey, EcDsaP256Signat
 use ipc_channel::ipc::*;
 use zerocopy::TryFromBytes;
 
-use std::process::{Child, Command};
+use std::process::Command;
 
 pub struct Agent {
     tx: IpcBytesSender,
     rx: IpcBytesReceiver,
-    proc: Child,
 }
 
 impl Agent {
@@ -18,18 +17,26 @@ impl Agent {
         unsafe {
             libc::umask(0o007);
         }
+
+        std::env::set_var("TMPDIR", "/tmp/ipcdir");
         let (server, name) = IpcOneShotServer::<(IpcBytesSender, IpcBytesReceiver)>::new().map_err(|_| Error::IO)?;
         
-        let proc = Command::new(agent_path)
+        let mut proc = Command::new(agent_path)
             .arg(name)
             .env("TMPDIR", "/tmp/ipcdir")
             .spawn()
             .expect("failed to start bash");
 
+        match proc.try_wait() {
+            Ok(Some(_)) => Err(Error::NoAgent),
+            Ok(None) => Ok(()),
+            Err(_) => Err(Error::IO)
+        }?;
+
         // Wait until the child is ready
         let (tx, rx) = server.accept().unwrap().1;
         
-        Ok(Self { tx, rx, proc })
+        Ok(Self { tx, rx })
     }
 
     pub fn init_agent(&self) -> Result<(), Error> {
