@@ -1,6 +1,6 @@
 mod request_handler;
 
-use libcrux_agent::{messages::IPCSetupRequest, Error};
+use libcrux_agent::{signing_messages::IPCSetupRequest, Error};
 
 use ipc_channel::{ipc::*, IpcError};
 

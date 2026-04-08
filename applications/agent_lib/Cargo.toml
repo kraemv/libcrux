@@ -10,8 +10,11 @@ readme.workspace = true
 
 [dependencies]
 
+libcrux-curve25519.workspace = true
 libcrux-ecdsa.workspace = true
 libcrux-ed25519.workspace = true
+libcrux-ml-kem.workspace=true
+libcrux-ml-kem.default-features=true
 libcrux-kmac.workspace = true
 libcrux-sha2.workspace = true
 

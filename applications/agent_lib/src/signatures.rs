@@ -62,6 +62,7 @@ impl Clone for EcDsaP256PublicKey {
         Self { key, alg: self.get_alg() }
     }
 }
+
 impl EcDsaP256PrivateKey {
     pub fn new(key: ecdsa::p256::PrivateKey, alg: DigestAlgorithm) -> Self {
         Self { key, alg }

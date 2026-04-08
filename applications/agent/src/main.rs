@@ -6,7 +6,7 @@ mod setup;
 
 use ipc_channel::ipc::*;
 use ipc_channel::IpcError;
-use libcrux_agent::messages;
+use libcrux_agent::messages::IPCRequest;
 use libcrux_agent::Error;
 use rand::SeedableRng;
 use rand_chacha::*;
@@ -32,7 +32,7 @@ fn main() {
             Err(IpcError::Disconnected) => break,
             Err(_) => continue,
         };
-        let Ok(new_request) = messages::IPCRequest::try_from(new_request.as_ref()) else {
+        let Ok(new_request) = IPCRequest::try_from(new_request.as_ref()) else {
             continue;
         };
         match request_handler::handle_request(&new_request) {
