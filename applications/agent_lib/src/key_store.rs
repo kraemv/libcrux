@@ -1,10 +1,15 @@
 // use crate::signature::{DigestAlgorithm, EcDsaP256PrivKey, EcDsaP256PrivateKey, Error, Signature, SigningKey, SigningKeyType, VerificationKeyType};
 use crate::signatures::*;
+use crate::kx::*;
 use crate::Error;
+use crate::ID;
 
 use base64ct::{Base64, Encoding};
+use libcrux_curve25519::ecdh_api::EcdhOwned;
+use libcrux_curve25519 as curve25519;
 use libcrux_ecdsa as ecdsa;
 use libcrux_ed25519 as ed25519;
+use libcrux_ml_kem::mlkem768 as mlkem768;
 use libcrux_kmac as kmac;
 use libcrux_sha2::Algorithm as DigestAlgorithm;
 use rand::CryptoRng;
@@ -28,6 +33,9 @@ pub enum SecretKey {
     EcDsaP256Key(EcDsaP256PrivateKey),
     Ed25519Key(Ed25519PrivateKey),
     // SessionTicket(SessionTicket),
+    MlKem768Key(mlkem768::MlKem768PrivateKey),
+    X25519Key(X25519SecretKey),
+    SharedSecret([u8; 32])
 }
 
 pub enum PublicKey {
@@ -36,12 +44,12 @@ pub enum PublicKey {
 }
 
 pub struct KeyStoreEntry {
-    id: [u8; 32],
+    id: ID,
     key: SecretKey,
 }
 
 impl KeyStoreEntry {
-    fn new(id: [u8; 32], key: SecretKey) -> Self {
+    fn new(id: ID, key: SecretKey) -> Self {
         Self { id, key }
     }
 
@@ -52,10 +60,17 @@ impl KeyStoreEntry {
 
 pub struct KeyStore {
     root_key: [u8; 32],
-    entries: RwLock<HashMap<[u8; 32], KeyStoreEntry>>,
+    entries: RwLock<HashMap<ID, KeyStoreEntry>>,
 }
 
 impl KeyStore {
+    pub fn new(rng: &mut impl CryptoRng) -> Result<Self, Error> {
+        let mut root_key = [0u8; 32];
+        rng.fill_bytes(&mut root_key);
+        let entries = RwLock::new(HashMap::new());
+        Ok(Self { root_key, entries })
+    }
+
     pub fn from_disk() -> Result<Self, Error> {
         let agent_path = format!("{}/agent", env!("HOME"));
         let agent_path = Path::new(&agent_path);
@@ -77,7 +92,7 @@ impl KeyStore {
         for line in lines {
             let mut parts = line.split(|c| *c == b' ');
             let scheme = parts.next().ok_or(Error::Encoding)?;
-            let mut id: [u8; 32] = [0u8; 32];
+            let mut id: ID = [0u8; 32];
             parts
                 .next()
                 .map(|enc_id: &[u8]| Base64::decode(enc_id, &mut id).unwrap())
@@ -133,7 +148,7 @@ impl KeyStore {
         self.entries.write().unwrap().insert(entry.id, entry);
     }
 
-    fn get_tag(&self, bytes: &[u8], customization: &[u8]) -> Result<[u8; 32], Error> {
+    fn get_tag(&self, bytes: &[u8], customization: &[u8]) -> Result<ID, Error> {
         let mut tag = [0u8; 32];
         let tag = kmac::kmac_128(&mut tag, &self.root_key, bytes, customization)
             .try_into()
@@ -148,9 +163,57 @@ impl KeyStore {
         Ok(tag)
     }
 
+    pub fn derive_for_x25519_id(&self, id: ID, pk: &X25519PublicKey) -> Result<ID, Error> {
+        let entries = self.entries.read().map_err(|_| Error::Derive)?;
+        let shared_key = match entries.get(&id).ok_or(Error::UnknownID)?.get_key() {
+            SecretKey::X25519Key(key) => key.derive(pk),
+            _ => Err(Error::Derive),
+        }?;
+
+        let tag = self.get_tag(shared_key.as_bytes(), b"SharedSecret")?;
+        let entry = KeyStoreEntry::new(tag, SecretKey::SharedSecret(*shared_key.as_bytes()));
+        self.add_entry(entry);
+
+        Ok(tag)
+    }
+
+    pub fn decaps_for_mlkem768_id(&self, id: ID, ct: &mlkem768::MlKem768Ciphertext) -> Result<ID, Error> {
+        let entries = self.entries.read().map_err(|_| Error::Derive)?;
+        let shared_key = match entries.get(&id).ok_or(Error::UnknownID)?.get_key() {
+            SecretKey::MlKem768Key(key) => Ok(mlkem768::decapsulate(key, ct)),
+            _ => Err(Error::Derive),
+        }?;
+
+        let tag = self.get_tag(shared_key.as_slice(), b"SharedSecret")?;
+        let entry = KeyStoreEntry::new(tag, SecretKey::SharedSecret(shared_key));
+        self.add_entry(entry);
+
+        Ok(tag)
+    }
+
+    pub fn encaps_for_mlkem768_id(&self, pk: &mlkem768::MlKem768PublicKey, rng: &mut impl CryptoRng) -> Result<(ID, mlkem768::MlKem768Ciphertext), Error> {
+        let mut rand = [0u8; libcrux_ml_kem::SHARED_SECRET_SIZE];
+        rng.fill_bytes(&mut rand);
+        let (ct, shared_key) = mlkem768::encapsulate(pk, rand);
+
+        let tag = self.get_tag(shared_key.as_slice(), b"SharedSecret")?;
+        let entry = KeyStoreEntry::new(tag, SecretKey::SharedSecret(shared_key));
+        self.add_entry(entry);
+
+        Ok((tag, ct))
+    }
+
+    pub fn export_shared_secret(&self, id: ID) -> Result<[u8; 32], Error> {
+        let entries = self.entries.read().map_err(|_| Error::Derive)?;
+        match entries.get(&id).ok_or(Error::UnknownID)?.get_key() {
+            SecretKey::SharedSecret(key) => Ok(*key),
+            _ => Err(Error::Derive),
+        }
+    }
+
     pub fn sign_for_ecdsa_p256_id(
         &self,
-        id: [u8; 32],
+        id: ID,
         message: &[u8],
         rng: &mut impl CryptoRng,
     ) -> Result<EcDsaP256Signature, Error> {
@@ -163,7 +226,7 @@ impl KeyStore {
 
     pub fn sign_for_ed25519_id(
         &self,
-        id: [u8; 32],
+        id: ID,
         message: &[u8],
     ) -> Result<Ed25519Signature, Error> {
         let entries = self.entries.read().map_err(|_| Error::Signing)?;
@@ -176,7 +239,7 @@ impl KeyStore {
     pub fn add_ecdsa_p256_key(
         &self,
         key: EcDsaP256PrivateKey,
-    ) -> Result<([u8; 32], EcDsaP256PublicKey), Error> {
+    ) -> Result<(ID, EcDsaP256PublicKey), Error> {
         let tag = self.get_tag(key.as_bytes(), b"EcDsaP256Key")?;
 
         let pk = ecdsa::p256::secret_to_public(key.get_key()).map_err(|_| Error::PublicKey)?;
@@ -191,7 +254,7 @@ impl KeyStore {
     pub fn add_ed25519_key(
         &self,
         key: Ed25519PrivateKey,
-    ) -> Result<([u8; 32], Ed25519PublicKey), Error> {
+    ) -> Result<(ID, Ed25519PublicKey), Error> {
         let tag = self.get_tag(key.as_bytes(), b"Ed25519Key")?;
         let mut pk = [0u8; 32];
         ed25519::secret_to_public(&mut pk, key.as_bytes());
@@ -202,5 +265,33 @@ impl KeyStore {
         self.add_entry(entry);
 
         Ok((tag, pk))
+    }
+
+    pub fn generate_mlkem_768_key(&self, rng: &mut impl CryptoRng) -> Result<(ID, MlKem768PublicKey), Error> {
+        let mut rand = [0u8; libcrux_ml_kem::KEY_GENERATION_SEED_SIZE];
+        rng.fill_bytes(&mut rand);
+        let key_pair = mlkem768::generate_key_pair(rand);
+
+        let id = self.get_tag(key_pair.private_key().as_slice(), b"MlKem768Key")?;
+        let key = SecretKey::MlKem768Key(key_pair.private_key().clone());
+        let pk = MlKem768PublicKey::new(*key_pair.public_key().as_slice());
+        let entry = KeyStoreEntry { id, key };
+        self.add_entry(entry);
+
+        Ok((id, pk))
+    }
+    
+    pub fn generate_x25519_key(&self, rng: &mut impl CryptoRng) -> Result<(ID, X25519PublicKey), Error> {
+        let mut rand = [0u8; curve25519::DK_LEN];
+        rng.fill_bytes(&mut rand);
+        let (pub_key, priv_key) = curve25519::X25519::generate_pair(&rand).map_err(|_| Error::KeyExchange)?;
+
+        let id = self.get_tag(&priv_key, b"X25519Key")?;
+        let key = SecretKey::X25519Key(X25519SecretKey::new(priv_key));
+        let pk = X25519PublicKey::new(pub_key);
+        let entry = KeyStoreEntry { id, key };
+        self.add_entry(entry);
+
+        Ok((id, pk))
     }
 }

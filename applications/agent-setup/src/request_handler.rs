@@ -5,7 +5,7 @@ use zerocopy::*;
 
 use crate::Error;
 use libcrux_agent::key_store::*;
-use libcrux_agent::messages::*;
+use libcrux_agent::signing_messages::*;
 use libcrux_agent::signatures::*;
 
 use std::env;

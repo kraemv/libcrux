@@ -1,61 +1,20 @@
-use crate::{
-    signatures::{
-        EcDsaP256PrivateKey, EcDsaP256PublicKey, EcDsaP256Signature, Ed25519PrivateKey,
-        Ed25519PublicKey, Ed25519Signature,
-    },
-    Error,
-};
-
-use libcrux_ecdsa as ecdsa;
-use libcrux_ed25519 as ed25519;
-use libcrux_sha2::Algorithm;
+use crate::Error;
+use crate::ID;
 use zerocopy::*;
+use crate::signing_messages::*;
+use crate::kex_messages::*;
 
-#[derive(Clone, Copy, TryFromBytes, IntoBytes, Immutable, KnownLayout, Unaligned)]
-#[repr(u8)]
-enum DigestAlgorithm {
-    Sha224,
-    Sha256,
-    Sha384,
-    Sha512,
-}
-
-pub struct EcDsaP256SignRequest {
-    id: [u8; 32],
-    message: Vec<u8>,
-}
-
-#[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
-#[repr(C)]
-pub struct EcDsaP256SignResponse {
-    algorithm: DigestAlgorithm,
-    signature: [u8; 64],
-}
-
-pub struct Ed25519SignRequest {
-    id: [u8; 32],
-    message: Vec<u8>,
-}
-
-#[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
-#[repr(C)]
-pub struct Ed25519SignResponse {
-    signature: [u8; 64],
-}
-
-#[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
+#[derive(PartialEq, Eq, IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
 #[repr(u8)]
 pub enum MessageKind {
     EcDsaP256Sign,
     Ed25519Sign,
-}
-
-#[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
-#[repr(u8)]
-pub enum SetupMessageKind {
-    AgentInit,
-    EcDsaP256Key,
-    Ed25519Key,
+    Export,
+    MlKem768KeyGen,
+    MlKem768Decaps,
+    MlKem768Encaps,
+    X25519KeyGen,
+    X25519Derive,
 }
 
 #[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout)]
@@ -63,6 +22,60 @@ pub enum SetupMessageKind {
 pub struct IPCMessageHeader {
     kind: MessageKind,
     response_len: u32,
+}
+
+#[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout)]
+pub struct ExportRequest {
+    id: ID,
+}
+
+impl ExportRequest {
+    pub fn new(id: ID) -> Self {
+        Self { id }
+    }
+
+    pub fn get_id(&self) -> ID {
+        self.id
+    }
+}
+
+#[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout)]
+pub struct ExportResponse {
+    shk: [u8; 32],
+}
+
+impl ExportResponse {
+    pub fn new(shk: [u8; 32]) -> Self {
+        Self{shk}
+    }
+
+    pub fn get_shk(&self) -> &[u8; 32] {
+        &self.shk
+    }
+}
+
+impl From<ExportRequest> for IPCRequest {
+    fn from(request: ExportRequest) -> Self {
+        let payload = request.get_id().to_vec();
+        let response_len: u32 = payload.len().try_into().unwrap();
+        let header = IPCMessageHeader {
+            kind: MessageKind::EcDsaP256Sign,
+            response_len,
+        };
+        Self { header, payload }
+    }
+}
+
+impl From<ExportResponse> for IPCResponse {
+    fn from(value: ExportResponse) -> Self {
+        let payload = value.as_bytes().to_vec();
+        let payload_len: u32 = payload
+            .len()
+            .try_into()
+            .expect("Payload exceeded maximum length");
+        let header = IPCMessageHeader::new(MessageKind::Export, payload_len);
+        Self { header, payload }
+    }
 }
 
 pub struct IPCRequest {
@@ -75,191 +88,17 @@ pub struct IPCResponse {
     payload: Vec<u8>,
 }
 
-#[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
-#[repr(u8)]
-pub enum InitResult {
-    Success(u8),
-    Failure(Error),
-}
-
-#[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
-#[repr(C)]
-pub struct EcDsaP256SetupRequest {
-    alg: DigestAlgorithm,
-    sk: [u8; 32],
-}
-
-#[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
-#[repr(C)]
-pub struct Ed25519SetupRequest {
-    sk: [u8; 32],
-}
-
-#[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
-#[repr(C)]
-pub struct EcDsaP256SetupResponse {
-    alg: DigestAlgorithm,
-    id: [u8; 32],
-    pk: [u8; 64],
-}
-
-#[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
-#[repr(C)]
-pub struct Ed25519SetupResponse {
-    id: [u8; 32],
-    pk: [u8; 32],
-}
-
-#[derive(TryFromBytes, IntoBytes, Immutable, KnownLayout)]
-#[repr(Rust, packed)]
-pub struct IPCSetupMessageHeader {
-    kind: SetupMessageKind,
-    response_len: u32,
-}
-
-pub struct IPCSetupRequest {
-    header: IPCSetupMessageHeader,
-    payload: Vec<u8>,
-}
-
-pub struct IPCSetupResponse {
-    header: IPCSetupMessageHeader,
-    payload: Vec<u8>,
-}
-
-impl From<Algorithm> for DigestAlgorithm {
-    fn from(alg: Algorithm) -> Self {
-        match alg {
-            Algorithm::Sha224 => DigestAlgorithm::Sha224,
-            Algorithm::Sha256 => DigestAlgorithm::Sha256,
-            Algorithm::Sha384 => DigestAlgorithm::Sha384,
-            Algorithm::Sha512 => DigestAlgorithm::Sha512,
-        }
-    }
-}
-
-impl From<DigestAlgorithm> for Algorithm {
-    fn from(alg: DigestAlgorithm) -> Self {
-        match alg {
-            DigestAlgorithm::Sha224 => Algorithm::Sha224,
-            DigestAlgorithm::Sha256 => Algorithm::Sha256,
-            DigestAlgorithm::Sha384 => Algorithm::Sha384,
-            DigestAlgorithm::Sha512 => Algorithm::Sha512,
-        }
-    }
-}
-
-impl EcDsaP256SignRequest {
-    pub fn new(id: [u8; 32], message: Vec<u8>) -> Self {
-        Self { id, message }
+impl IPCMessageHeader {
+    pub(crate) fn new(kind: MessageKind, response_len: u32) -> Self {
+        Self { kind, response_len }
     }
 
-    pub fn get_id(&self) -> &[u8; 32] {
-        &self.id
+    pub fn get_type(&self) -> &MessageKind {
+        &self.kind
     }
 
-    pub fn get_payload(&self) -> &[u8] {
-        &self.message
-    }
-}
-
-impl TryFrom<&[u8]> for EcDsaP256SignRequest {
-    type Error = Error;
-
-    fn try_from(request: &[u8]) -> Result<Self, Self::Error> {
-        let (id, message) = request
-            .split_at_checked(32)
-            .ok_or(Error::MalformedRequest)?;
-        let id: [u8; 32] = id.try_into().expect("No panic here!");
-        Ok(Self {
-            id,
-            message: message.to_vec(),
-        })
-    }
-}
-
-impl From<EcDsaP256SignRequest> for Vec<u8> {
-    fn from(request: EcDsaP256SignRequest) -> Self {
-        let mut result = request.id.to_vec();
-        result.extend(request.message);
-        result
-    }
-}
-
-impl From<EcDsaP256Signature> for EcDsaP256SignResponse {
-    fn from(sig: EcDsaP256Signature) -> Self {
-        let mut signature = [0u8; 64];
-        let signature_components = sig.get_signature();
-        let (r, s) = signature_components.as_bytes();
-        signature[..32].copy_from_slice(r);
-        signature[32..].copy_from_slice(s);
-
-        Self {
-            algorithm: sig.get_alg().into(),
-            signature,
-        }
-    }
-}
-
-impl From<&EcDsaP256SignResponse> for EcDsaP256Signature {
-    fn from(sig: &EcDsaP256SignResponse) -> Self {
-        let alg = sig.algorithm;
-        let signature = ecdsa::p256::Signature::from_bytes(sig.signature);
-
-        EcDsaP256Signature::new(signature, alg.into())
-    }
-}
-
-impl Ed25519SignRequest {
-    pub fn new(id: [u8; 32], message: Vec<u8>) -> Self {
-        Self { id, message }
-    }
-
-    pub fn get_id(&self) -> &[u8; 32] {
-        &self.id
-    }
-
-    pub fn get_payload(&self) -> &[u8] {
-        &self.message
-    }
-}
-
-impl TryFrom<&[u8]> for Ed25519SignRequest {
-    type Error = Error;
-
-    fn try_from(request: &[u8]) -> Result<Self, Self::Error> {
-        let (id, message) = request
-            .split_at_checked(32)
-            .ok_or(Error::MalformedRequest)?;
-        let id: [u8; 32] = id.try_into().expect("No panic here!");
-        Ok(Self {
-            id,
-            message: message.to_vec(),
-        })
-    }
-}
-
-impl From<Ed25519SignRequest> for Vec<u8> {
-    fn from(request: Ed25519SignRequest) -> Self {
-        let mut result = request.id.to_vec();
-        result.extend(request.message);
-        result
-    }
-}
-
-impl From<Ed25519Signature> for Ed25519SignResponse {
-    fn from(sig: Ed25519Signature) -> Self {
-        Self {
-            signature: sig.into_bytes(),
-        }
-    }
-}
-
-impl From<&Ed25519SignResponse> for Ed25519Signature {
-    fn from(sig: &Ed25519SignResponse) -> Self {
-        let signature = ed25519::Signature::from_bytes(sig.signature);
-
-        Ed25519Signature::new(signature)
+    pub fn get_len(&self) -> u32 {
+        self.response_len
     }
 }
 
@@ -277,6 +116,22 @@ impl IPCRequest {
         buffer.extend(self.payload);
 
         buffer
+    }
+
+    pub fn x25519_keygen() -> Self {
+        let header = IPCMessageHeader::new(MessageKind::X25519KeyGen, 0);
+        Self {
+            header,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn mlkem768_keygen() -> Self {
+        let header = IPCMessageHeader::new(MessageKind::MlKem768KeyGen, 0);
+        Self {
+            header,
+            payload: Vec::new(),
+        }
     }
 }
 
@@ -310,71 +165,6 @@ impl TryFrom<&[u8]> for IPCRequest {
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         let (header, payload) =
             IPCMessageHeader::try_read_from_prefix(value).map_err(|_| Error::MalformedRequest)?;
-        let payload_len = header.get_len() as usize;
-        let payload = payload
-            .split_at_checked(payload_len)
-            .ok_or(Error::MalformedRequest)?
-            .0
-            .to_vec();
-        Ok(Self { header, payload })
-    }
-}
-
-impl IPCSetupRequest {
-    pub fn init_request() -> Self {
-        let header = IPCSetupMessageHeader::new(SetupMessageKind::AgentInit, 0);
-        Self {
-            header,
-            payload: Vec::new(),
-        }
-    }
-
-    pub fn get_type(&self) -> &IPCSetupMessageHeader {
-        &self.header
-    }
-
-    pub fn get_payload(&self) -> &[u8] {
-        self.payload.as_ref()
-    }
-
-    pub fn into_bytes(self) -> Vec<u8> {
-        let mut buffer = self.header.as_bytes().to_vec();
-        buffer.extend(self.payload);
-
-        buffer
-    }
-}
-
-impl From<EcDsaP256SetupRequest> for IPCSetupRequest {
-    fn from(request: EcDsaP256SetupRequest) -> Self {
-        let payload = request.as_bytes().to_vec();
-        let response_len: u32 = payload.len().try_into().unwrap();
-        let header = IPCSetupMessageHeader {
-            kind: SetupMessageKind::EcDsaP256Key,
-            response_len,
-        };
-        Self { header, payload }
-    }
-}
-
-impl From<Ed25519SetupRequest> for IPCSetupRequest {
-    fn from(request: Ed25519SetupRequest) -> Self {
-        let payload = request.as_bytes().to_vec();
-        let response_len: u32 = payload.len().try_into().unwrap();
-        let header = IPCSetupMessageHeader {
-            kind: SetupMessageKind::Ed25519Key,
-            response_len,
-        };
-        Self { header, payload }
-    }
-}
-
-impl TryFrom<&[u8]> for IPCSetupRequest {
-    type Error = Error;
-
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        let (header, payload) = IPCSetupMessageHeader::try_read_from_prefix(value)
-            .map_err(|_| Error::MalformedRequest)?;
         let payload_len = header.get_len() as usize;
         let payload = payload
             .split_at_checked(payload_len)
@@ -442,181 +232,103 @@ impl From<Ed25519SignResponse> for IPCResponse {
     }
 }
 
-impl IPCSetupResponse {
-    pub fn into_bytes(self) -> Vec<u8> {
-        let mut buffer = self.header.as_bytes().to_vec();
-        buffer.extend(self.payload);
-
-        buffer
-    }
-
-    pub fn get_header(&self) -> &IPCSetupMessageHeader {
-        &self.header
-    }
-
-    pub fn get_payload(&self) -> &[u8] {
-        &self.payload
+// MlKem768KeyGen
+impl From<MlKem768KeyGenResponse> for IPCResponse {
+    fn from(value: MlKem768KeyGenResponse) -> Self {
+        let payload = value.as_bytes().to_vec();
+        let payload_len: u32 = payload
+            .len()
+            .try_into()
+            .expect("Payload exceeded maximum length");
+        let header = IPCMessageHeader::new(MessageKind::MlKem768KeyGen, payload_len);
+        Self { header, payload }
     }
 }
 
-impl TryFrom<&[u8]> for IPCSetupResponse {
-    type Error = Error;
-
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        let (header, payload) = IPCSetupMessageHeader::try_read_from_prefix(value)
-            .map_err(|_| Error::MalformedRequest)?;
-        let payload_len = header.get_len() as usize;
-        let payload = payload
-            .split_at_checked(payload_len)
-            .ok_or(Error::MalformedRequest)?
-            .0
-            .to_vec();
-        Ok(Self { header, payload })
-    }
-}
-
-impl IPCMessageHeader {
-    pub(crate) fn new(kind: MessageKind, response_len: u32) -> Self {
-        Self { kind, response_len }
-    }
-
-    pub fn get_type(&self) -> &MessageKind {
-        &self.kind
-    }
-
-    pub fn get_len(&self) -> u32 {
-        self.response_len
-    }
-}
-
-impl IPCSetupMessageHeader {
-    pub fn new(kind: SetupMessageKind, response_len: u32) -> Self {
-        Self { kind, response_len }
-    }
-
-    pub fn get_type(&self) -> &SetupMessageKind {
-        &self.kind
-    }
-
-    pub fn get_len(&self) -> u32 {
-        self.response_len
-    }
-}
-
-impl EcDsaP256SetupResponse {
-    pub fn new(id: [u8; 32], pk: EcDsaP256PublicKey) -> Self {
-        Self {
-            alg: pk.get_alg().into(),
-            pk: pk.get_key().0,
-            id,
-        }
-    }
-
-    pub fn get_id(&self) -> &[u8; 32] {
-        &self.id
-    }
-}
-
-impl From<&EcDsaP256SetupResponse> for EcDsaP256PublicKey {
-    fn from(response: &EcDsaP256SetupResponse) -> Self {
-        EcDsaP256PublicKey::new(ecdsa::p256::PublicKey(response.pk), response.alg.into())
-    }
-}
-
-impl Ed25519SetupResponse {
-    pub fn new(id: [u8; 32], pk: Ed25519PublicKey) -> Self {
-        Self {
-            id,
-            pk: pk.into_bytes(),
-        }
-    }
-
-    pub fn get_id(&self) -> &[u8; 32] {
-        &self.id
-    }
-}
-
-impl From<&Ed25519SetupResponse> for Ed25519PublicKey {
-    fn from(response: &Ed25519SetupResponse) -> Self {
-        Ed25519PublicKey::new(ed25519::VerificationKey::from_bytes(*response.get_id()))
-    }
-}
-
-impl TryFrom<&EcDsaP256SetupRequest> for EcDsaP256PrivateKey {
-    type Error = Error;
-
-    fn try_from(request: &EcDsaP256SetupRequest) -> Result<Self, Error> {
-        let sk = libcrux_ecdsa::p256::PrivateKey::try_from(&request.sk)
-            .map_err(|_| Error::MalformedRequest)?;
-        Ok(EcDsaP256PrivateKey::new(sk, request.alg.into()))
-    }
-}
-
-impl From<&EcDsaP256PrivateKey> for EcDsaP256SetupRequest {
-    fn from(key: &EcDsaP256PrivateKey) -> Self {
-        Self {
-            alg: key.get_alg().into(),
-            sk: *key.as_bytes(),
-        }
-    }
-}
-
-impl From<&Ed25519SetupRequest> for Ed25519PrivateKey {
-    fn from(request: &Ed25519SetupRequest) -> Self {
-        let sk = libcrux_ed25519::SigningKey::from_bytes(request.sk);
-        Ed25519PrivateKey::new(sk)
-    }
-}
-
-impl From<&Ed25519PrivateKey> for Ed25519SetupRequest {
-    fn from(key: &Ed25519PrivateKey) -> Self {
-        Self {
-            sk: *key.as_bytes(),
-        }
-    }
-}
-
-impl From<Result<(), Error>> for InitResult {
-    fn from(res: Result<(), Error>) -> Self {
-        match res {
-            Ok(()) => InitResult::Success(1),
-            Err(e) => InitResult::Failure(e),
-        }
-    }
-}
-
-impl From<&EcDsaP256SetupResponse> for IPCSetupResponse {
-    fn from(res: &EcDsaP256SetupResponse) -> Self {
-        let payload = res.as_bytes().to_vec();
+// MlKem768Decaps
+impl From<MlKem768DecapsRequest> for IPCRequest {
+    fn from(request: MlKem768DecapsRequest) -> Self {
+        let payload = request.as_bytes().to_vec();
         let response_len: u32 = payload.len().try_into().unwrap();
-        let header = IPCSetupMessageHeader {
-            kind: SetupMessageKind::EcDsaP256Key,
+        let header = IPCMessageHeader {
+            kind: MessageKind::MlKem768Decaps,
             response_len,
         };
         Self { header, payload }
     }
 }
 
-impl From<&Ed25519SetupResponse> for IPCSetupResponse {
-    fn from(res: &Ed25519SetupResponse) -> Self {
-        let payload = res.as_bytes().to_vec();
+impl From<MlKem768DecapsResponse> for IPCResponse {
+    fn from(value: MlKem768DecapsResponse) -> Self {
+        let payload = value.as_bytes().to_vec();
+        let payload_len: u32 = payload
+            .len()
+            .try_into()
+            .expect("Payload exceeded maximum length");
+        let header = IPCMessageHeader::new(MessageKind::MlKem768Decaps, payload_len);
+        Self { header, payload }
+    }
+}
+
+// MlKem768Encaps
+impl From<MlKem768EncapsRequest> for IPCRequest {
+    fn from(request: MlKem768EncapsRequest) -> Self {
+        let payload = request.as_bytes().to_vec();
         let response_len: u32 = payload.len().try_into().unwrap();
-        let header = IPCSetupMessageHeader {
-            kind: SetupMessageKind::Ed25519Key,
+        let header = IPCMessageHeader {
+            kind: MessageKind::MlKem768Encaps,
             response_len,
         };
         Self { header, payload }
     }
 }
 
-impl From<&InitResult> for IPCSetupResponse {
-    fn from(res: &InitResult) -> Self {
-        let payload = res.as_bytes().to_vec();
+impl From<MlKem768EncapsResponse> for IPCResponse {
+    fn from(value: MlKem768EncapsResponse) -> Self {
+        let payload = value.as_bytes().to_vec();
+        let payload_len: u32 = payload
+            .len()
+            .try_into()
+            .expect("Payload exceeded maximum length");
+        let header = IPCMessageHeader::new(MessageKind::MlKem768Encaps, payload_len);
+        Self { header, payload }
+    }
+}
+
+// X25519KeyGen
+impl From<X25519KeyGenResponse> for IPCResponse {
+    fn from(value: X25519KeyGenResponse) -> Self {
+        let payload = value.as_bytes().to_vec();
+        let payload_len: u32 = payload
+            .len()
+            .try_into()
+            .expect("Payload exceeded maximum length");
+        let header = IPCMessageHeader::new(MessageKind::X25519KeyGen, payload_len);
+        Self { header, payload }
+    }
+}
+
+// X25519Derive
+impl From<X25519DeriveRequest> for IPCRequest {
+    fn from(request: X25519DeriveRequest) -> Self {
+        let payload = request.as_bytes().to_vec();
         let response_len: u32 = payload.len().try_into().unwrap();
-        let header = IPCSetupMessageHeader {
-            kind: SetupMessageKind::AgentInit,
+        let header = IPCMessageHeader {
+            kind: MessageKind::X25519Derive,
             response_len,
         };
+        Self { header, payload }
+    }
+}
+
+impl From<X25519DeriveResponse> for IPCResponse {
+    fn from(value: X25519DeriveResponse) -> Self {
+        let payload = value.as_bytes().to_vec();
+        let payload_len: u32 = payload
+            .len()
+            .try_into()
+            .expect("Payload exceeded maximum length");
+        let header = IPCMessageHeader::new(MessageKind::X25519Derive, payload_len);
         Self { header, payload }
     }
 }
