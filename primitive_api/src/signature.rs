@@ -88,7 +88,11 @@ impl Signature {
 
 impl SigningKeyID {
     pub fn new(id: [u8; 32], scheme: SignatureScheme, public_key: VerificationKeyType) -> Self {
-        Self { id, scheme, public_key }
+        Self {
+            id,
+            scheme,
+            public_key,
+        }
     }
 }
 

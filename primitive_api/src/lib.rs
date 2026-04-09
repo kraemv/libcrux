@@ -1,6 +1,6 @@
+pub mod kem;
 mod provider;
 pub mod signature;
-pub mod kem;
 /*
 Desired primitives / functionalities:
     All functions return a result
