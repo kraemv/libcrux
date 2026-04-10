@@ -1,8 +1,6 @@
-// use crate::signature::{DigestAlgorithm, EcDsaP256PrivKey, EcDsaP256PrivateKey, Error, Signature, SigningKey, SigningKeyType, VerificationKeyType};
 use crate::signatures::*;
 use crate::kx::*;
-use crate::Error;
-use crate::ID;
+use crate::{Error, ID, SharedKey};
 
 use base64ct::{Base64, Encoding};
 use libcrux_curve25519::ecdh_api::EcdhOwned;
@@ -19,7 +17,7 @@ use std::format;
 use std::fs;
 use std::path::Path;
 use std::string::String;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 fn encode_hex(bytes: &[u8]) -> String {
     let mut s = String::with_capacity(bytes.len() * 2);
@@ -33,9 +31,9 @@ pub enum SecretKey {
     EcDsaP256Key(EcDsaP256PrivateKey),
     Ed25519Key(Ed25519PrivateKey),
     // SessionTicket(SessionTicket),
-    MlKem768Key(mlkem768::MlKem768PrivateKey),
+    MlKem768Key(Arc<mlkem768::MlKem768PrivateKey>),
     X25519Key(X25519SecretKey),
-    SharedSecret([u8; 32])
+    SharedSecret(SharedKey)
 }
 
 pub enum PublicKey {
@@ -164,25 +162,28 @@ impl KeyStore {
     }
 
     pub fn derive_for_x25519_id(&self, id: ID, pk: &X25519PublicKey) -> Result<ID, Error> {
-        let entries = self.entries.read().map_err(|_| Error::Derive)?;
-        let shared_key = match entries.get(&id).ok_or(Error::UnknownID)?.get_key() {
-            SecretKey::X25519Key(key) => key.derive(pk),
-            _ => Err(Error::Derive),
-        }?;
-
-        let tag = self.get_tag(shared_key.as_bytes(), b"SharedSecret")?;
-        let entry = KeyStoreEntry::new(tag, SecretKey::SharedSecret(*shared_key.as_bytes()));
+        let shared_key = {
+            let entries = self.entries.read().map_err(|_| Error::Derive)?;
+            match entries.get(&id).ok_or(Error::UnknownID)?.get_key() {
+                SecretKey::X25519Key(key) => key.derive(pk),
+                _ => Err(Error::Derive),
+            }?
+        };
+        let tag = self.get_tag(&shared_key, b"SharedSecret")?;
+        let entry = KeyStoreEntry::new(tag, SecretKey::SharedSecret(shared_key));
         self.add_entry(entry);
 
         Ok(tag)
     }
 
     pub fn decaps_for_mlkem768_id(&self, id: ID, ct: &mlkem768::MlKem768Ciphertext) -> Result<ID, Error> {
-        let entries = self.entries.read().map_err(|_| Error::Derive)?;
-        let shared_key = match entries.get(&id).ok_or(Error::UnknownID)?.get_key() {
-            SecretKey::MlKem768Key(key) => Ok(mlkem768::decapsulate(key, ct)),
-            _ => Err(Error::Derive),
-        }?;
+        let shared_key = {
+            let entries = self.entries.read().map_err(|_| Error::Derive)?;
+                match entries.get(&id).ok_or(Error::UnknownID)?.get_key() {
+                SecretKey::MlKem768Key(key) => Ok(mlkem768::decapsulate(key, ct)),
+                _ => Err(Error::Derive),
+            }?
+        };
 
         let tag = self.get_tag(shared_key.as_slice(), b"SharedSecret")?;
         let entry = KeyStoreEntry::new(tag, SecretKey::SharedSecret(shared_key));
@@ -203,7 +204,7 @@ impl KeyStore {
         Ok((tag, ct))
     }
 
-    pub fn export_shared_secret(&self, id: ID) -> Result<[u8; 32], Error> {
+    pub fn export_shared_secret(&self, id: ID) -> Result<SharedKey, Error> {
         let entries = self.entries.read().map_err(|_| Error::Derive)?;
         match entries.get(&id).ok_or(Error::UnknownID)?.get_key() {
             SecretKey::SharedSecret(key) => Ok(*key),
@@ -273,7 +274,7 @@ impl KeyStore {
         let key_pair = mlkem768::generate_key_pair(rand);
 
         let id = self.get_tag(key_pair.private_key().as_slice(), b"MlKem768Key")?;
-        let key = SecretKey::MlKem768Key(key_pair.private_key().clone());
+        let key = SecretKey::MlKem768Key(Arc::new(key_pair.private_key().clone()));
         let pk = MlKem768PublicKey::new(*key_pair.public_key().as_slice());
         let entry = KeyStoreEntry { id, key };
         self.add_entry(entry);
