@@ -1,23 +1,21 @@
-use ipc_channel::ipc::{IpcBytesSender, IpcBytesReceiver, IpcOneShotServer};
-use zerocopy::TryFromBytes;
+use ipc_channel::ipc::{IpcBytesReceiver, IpcBytesSender, IpcOneShotServer};
 use std::process::Command;
+use zerocopy::TryFromBytes;
 
 use crate::{
-    Error,
-    ID,
     kex_messages::{
-        MlKem768DecapsRequest, MlKem768DecapsResponse,
-        MlKem768EncapsRequest, MlKem768EncapsResponse,
-        MlKem768KeyGenResponse,
-        X25519DeriveRequest, X25519KeyGenResponse,
+        MlKem768DecapsRequest, MlKem768DecapsResponse, MlKem768EncapsRequest,
+        MlKem768EncapsResponse, MlKem768KeyGenResponse, X25519DeriveRequest, X25519DeriveResponse,
+        X25519KeyGenResponse,
     },
     kx::{MlKem768Ciphertext, MlKem768PublicKey, X25519PublicKey},
     messages::{ExportRequest, ExportResponse, IPCRequest, IPCResponse, MessageKind},
     signatures::{
-        EcDsaP256PrivateKey, EcDsaP256PublicKey, EcDsaP256Signature,
-        Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature,
+        EcDsaP256PrivateKey, EcDsaP256PublicKey, EcDsaP256Signature, Ed25519PrivateKey,
+        Ed25519PublicKey, Ed25519Signature,
     },
     signing_messages::*,
+    Error, ID,
 };
 
 // Type aliases for libcrux ML-KEM types to avoid repetition
@@ -31,12 +29,14 @@ pub struct Agent {
 
 impl Agent {
     pub fn connect_agent(agent_path: String) -> Result<Self, Error> {
-        unsafe { libc::umask(0o007); }
+        unsafe {
+            libc::umask(0o007);
+        }
 
         std::env::set_var("TMPDIR", "/tmp/ipcdir");
 
-        let (server, name) = IpcOneShotServer::<(IpcBytesSender, IpcBytesReceiver)>::new()
-            .map_err(|_| Error::IO)?;
+        let (server, name) =
+            IpcOneShotServer::<(IpcBytesSender, IpcBytesReceiver)>::new().map_err(|_| Error::IO)?;
 
         let mut proc = Command::new(agent_path)
             .arg(name)
@@ -46,8 +46,8 @@ impl Agent {
 
         match proc.try_wait() {
             Ok(Some(_)) => Err(Error::NoAgent),
-            Ok(None)    => Ok(()),
-            Err(_)      => Err(Error::IO),
+            Ok(None) => Ok(()),
+            Err(_) => Err(Error::IO),
         }?;
 
         let (tx, rx) = server.accept().unwrap().1;
@@ -72,10 +72,7 @@ impl Agent {
         self.recv()
     }
 
-    fn expect_kind(
-        response: &IPCResponse,
-        expected: MessageKind,
-    ) -> Result<&[u8], Error> {
+    fn expect_kind(response: &IPCResponse, expected: MessageKind) -> Result<&[u8], Error> {
         if *response.get_header().get_type() == expected {
             Ok(response.get_payload())
         } else {
@@ -105,7 +102,7 @@ impl Agent {
         }
     }
 
-    pub fn add_ecdsa_p256_key(
+    pub fn ecdsa_p256_add_key(
         &self,
         key: EcDsaP256PrivateKey,
     ) -> Result<(ID, EcDsaP256PublicKey), Error> {
@@ -125,10 +122,7 @@ impl Agent {
         }
     }
 
-    pub fn add_ed25519_key(
-        &self,
-        key: Ed25519PrivateKey,
-    ) -> Result<(ID, Ed25519PublicKey), Error> {
+    pub fn ed25519_add_key(&self, key: Ed25519PrivateKey) -> Result<(ID, Ed25519PublicKey), Error> {
         let request = IPCSetupRequest::from(Ed25519SetupRequest::from(&key));
         self.tx.send(&request.into_bytes()).map_err(|_| Error::IO)?;
 
@@ -149,7 +143,7 @@ impl Agent {
     // Signing
     // -------------------------------------------------------------------------
 
-    pub fn sign_for_ecdsa_p256_id(
+    pub fn ecdsa_p256_sign_for_id(
         &self,
         id: ID,
         message: Vec<u8>,
@@ -161,11 +155,7 @@ impl Agent {
         Ok(EcDsaP256Signature::from(r))
     }
 
-    pub fn sign_for_ed25519_id(
-        &self,
-        id: ID,
-        message: Vec<u8>,
-    ) -> Result<Ed25519Signature, Error> {
+    pub fn ed25519_sign_for_id(&self, id: ID, message: Vec<u8>) -> Result<Ed25519Signature, Error> {
         let response = self.send_recv(IPCRequest::from(Ed25519SignRequest::new(id, message)))?;
         let payload = Self::expect_kind(&response, MessageKind::Ed25519Sign)?;
         let r = Ed25519SignResponse::try_ref_from_bytes(payload)
@@ -177,7 +167,7 @@ impl Agent {
     // X25519
     // -------------------------------------------------------------------------
 
-    pub fn generate_x25519_key_id(&self) -> Result<(ID, X25519PublicKey), Error> {
+    pub fn x25519_generate_key_id(&self) -> Result<(ID, X25519PublicKey), Error> {
         let response = self.send_recv(IPCRequest::x25519_keygen())?;
         let payload = Self::expect_kind(&response, MessageKind::X25519KeyGen)?;
         let r = X25519KeyGenResponse::try_ref_from_bytes(payload)
@@ -185,14 +175,10 @@ impl Agent {
         Ok((*r.get_id(), X25519PublicKey::from(r)))
     }
 
-    pub fn derive_for_x25519_key_id(
-        &self,
-        id: ID,
-        pk: X25519PublicKey,
-    ) -> Result<ID, Error> {
+    pub fn x25519_derive_for_key_id(&self, id: ID, pk: X25519PublicKey) -> Result<ID, Error> {
         let response = self.send_recv(IPCRequest::from(X25519DeriveRequest::new(id, pk)))?;
         let payload = Self::expect_kind(&response, MessageKind::X25519Derive)?;
-        let r = X25519KeyGenResponse::try_ref_from_bytes(payload)
+        let r = X25519DeriveResponse::try_ref_from_bytes(payload)
             .map_err(|_| Error::MalformedResponse)?;
         Ok(*r.get_id())
     }
@@ -201,9 +187,7 @@ impl Agent {
     // ML-KEM 768
     // -------------------------------------------------------------------------
 
-    pub fn generate_mlkem_768_key_id(
-        &self,
-    ) -> Result<(ID, LibcruxMlKem768PublicKey), Error> {
+    pub fn mlkem_768_generate_key_id(&self) -> Result<(ID, LibcruxMlKem768PublicKey), Error> {
         let response = self.send_recv(IPCRequest::mlkem768_keygen())?;
         let payload = Self::expect_kind(&response, MessageKind::MlKem768KeyGen)?;
         let r = MlKem768KeyGenResponse::try_ref_from_bytes(payload)
@@ -211,7 +195,7 @@ impl Agent {
         Ok((*r.get_id(), LibcruxMlKem768PublicKey::from(r)))
     }
 
-    pub fn decaps_for_mlkem768_id(
+    pub fn mlkem_768_decaps_for_id(
         &self,
         id: ID,
         ct: LibcruxMlKem768Ciphertext,
@@ -224,7 +208,7 @@ impl Agent {
         Ok(*r.get_id())
     }
 
-    pub fn encaps_for_mlkem768_id(
+    pub fn mlkem_768_encaps_for_id(
         &self,
         pk: LibcruxMlKem768PublicKey,
     ) -> Result<(ID, LibcruxMlKem768Ciphertext), Error> {
@@ -233,14 +217,17 @@ impl Agent {
         let payload = Self::expect_kind(&response, MessageKind::MlKem768Encaps)?;
         let r = MlKem768EncapsResponse::try_ref_from_bytes(payload)
             .map_err(|_| Error::MalformedResponse)?;
-        Ok((*r.get_id(), LibcruxMlKem768Ciphertext::from(r.get_ct().as_bytes())))
+        Ok((
+            *r.get_id(),
+            LibcruxMlKem768Ciphertext::from(r.get_ct().as_bytes()),
+        ))
     }
 
     pub fn export_key(&self, id: ID) -> Result<[u8; 32], Error> {
         let response = self.send_recv(IPCRequest::from(ExportRequest::new(id)))?;
         let payload = Self::expect_kind(&response, MessageKind::Export)?;
-        let r = ExportResponse::try_ref_from_bytes(payload)
-            .map_err(|_| Error::MalformedResponse)?;
+        let r =
+            ExportResponse::try_ref_from_bytes(payload).map_err(|_| Error::MalformedResponse)?;
         Ok(*r.get_shk())
     }
 }

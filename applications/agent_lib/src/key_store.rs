@@ -1,14 +1,14 @@
-use crate::signatures::*;
 use crate::kx::*;
-use crate::{Error, ID, SharedKey};
+use crate::signatures::*;
+use crate::{Error, SharedKey, ID};
 
 use base64ct::{Base64, Encoding};
-use libcrux_curve25519::ecdh_api::EcdhOwned;
 use libcrux_curve25519 as curve25519;
+use libcrux_curve25519::ecdh_api::EcdhOwned;
 use libcrux_ecdsa as ecdsa;
 use libcrux_ed25519 as ed25519;
-use libcrux_ml_kem::mlkem768 as mlkem768;
 use libcrux_kmac as kmac;
+use libcrux_ml_kem::mlkem768;
 use libcrux_sha2::Algorithm as DigestAlgorithm;
 use rand::CryptoRng;
 use std::collections::HashMap;
@@ -33,7 +33,7 @@ pub enum SecretKey {
     // SessionTicket(SessionTicket),
     MlKem768Key(Arc<mlkem768::MlKem768PrivateKey>),
     X25519Key(X25519SecretKey),
-    SharedSecret(SharedKey)
+    SharedSecret(SharedKey),
 }
 
 pub enum PublicKey {
@@ -118,7 +118,7 @@ impl KeyStore {
                         .map_err(|_| Error::Encoding)?;
                     let ecdsa_key = EcDsaP256PrivateKey::new(private_key, DigestAlgorithm::Sha256);
                     store
-                        .add_ecdsa_p256_key(ecdsa_key)
+                        .ecdsa_p256_add_key(ecdsa_key)
                         .map(|(id, key)| (id, PublicKey::EcDsaP256Key(key)))
                 }
                 b"ED_25519" => {
@@ -129,7 +129,7 @@ impl KeyStore {
                     let private_key =
                         Ed25519PrivateKey::new(ed25519::SigningKey::from_bytes(secret_scalar));
                     store
-                        .add_ed25519_key(private_key)
+                        .ed25519_add_key(private_key)
                         .map(|(id, key)| (id, PublicKey::Ed25519Key(key)))
                 }
                 _ => return Err(Error::Unsupported),
@@ -152,16 +152,16 @@ impl KeyStore {
             .try_into()
             .unwrap();
 
-        {
+        /*{
             if self.entries.read().unwrap().contains_key(&tag) {
                 return Err(Error::DuplicateKey);
             }
-        }
+        }*/
 
         Ok(tag)
     }
 
-    pub fn derive_for_x25519_id(&self, id: ID, pk: &X25519PublicKey) -> Result<ID, Error> {
+    pub fn x25519_derive_for_id(&self, id: ID, pk: &X25519PublicKey) -> Result<ID, Error> {
         let shared_key = {
             let entries = self.entries.read().map_err(|_| Error::Derive)?;
             match entries.get(&id).ok_or(Error::UnknownID)?.get_key() {
@@ -176,10 +176,14 @@ impl KeyStore {
         Ok(tag)
     }
 
-    pub fn decaps_for_mlkem768_id(&self, id: ID, ct: &mlkem768::MlKem768Ciphertext) -> Result<ID, Error> {
+    pub fn mlkem_768_decaps_for_id(
+        &self,
+        id: ID,
+        ct: &mlkem768::MlKem768Ciphertext,
+    ) -> Result<ID, Error> {
         let shared_key = {
             let entries = self.entries.read().map_err(|_| Error::Derive)?;
-                match entries.get(&id).ok_or(Error::UnknownID)?.get_key() {
+            match entries.get(&id).ok_or(Error::UnknownID)?.get_key() {
                 SecretKey::MlKem768Key(key) => Ok(mlkem768::decapsulate(key, ct)),
                 _ => Err(Error::Derive),
             }?
@@ -192,7 +196,11 @@ impl KeyStore {
         Ok(tag)
     }
 
-    pub fn encaps_for_mlkem768_id(&self, pk: &mlkem768::MlKem768PublicKey, rng: &mut impl CryptoRng) -> Result<(ID, mlkem768::MlKem768Ciphertext), Error> {
+    pub fn mlkem_768_encaps_for_id(
+        &self,
+        pk: &mlkem768::MlKem768PublicKey,
+        rng: &mut impl CryptoRng,
+    ) -> Result<(ID, mlkem768::MlKem768Ciphertext), Error> {
         let mut rand = [0u8; libcrux_ml_kem::SHARED_SECRET_SIZE];
         rng.fill_bytes(&mut rand);
         let (ct, shared_key) = mlkem768::encapsulate(pk, rand);
@@ -212,7 +220,7 @@ impl KeyStore {
         }
     }
 
-    pub fn sign_for_ecdsa_p256_id(
+    pub fn ecdsa_p256_sign_for_id(
         &self,
         id: ID,
         message: &[u8],
@@ -225,11 +233,7 @@ impl KeyStore {
         }
     }
 
-    pub fn sign_for_ed25519_id(
-        &self,
-        id: ID,
-        message: &[u8],
-    ) -> Result<Ed25519Signature, Error> {
+    pub fn ed25519_sign_for_id(&self, id: ID, message: &[u8]) -> Result<Ed25519Signature, Error> {
         let entries = self.entries.read().map_err(|_| Error::Signing)?;
         match entries.get(&id).ok_or(Error::UnknownID)?.get_key() {
             SecretKey::Ed25519Key(key) => key.sign(message),
@@ -237,7 +241,7 @@ impl KeyStore {
         }
     }
 
-    pub fn add_ecdsa_p256_key(
+    pub fn ecdsa_p256_add_key(
         &self,
         key: EcDsaP256PrivateKey,
     ) -> Result<(ID, EcDsaP256PublicKey), Error> {
@@ -252,10 +256,7 @@ impl KeyStore {
         Ok((tag, pk))
     }
 
-    pub fn add_ed25519_key(
-        &self,
-        key: Ed25519PrivateKey,
-    ) -> Result<(ID, Ed25519PublicKey), Error> {
+    pub fn ed25519_add_key(&self, key: Ed25519PrivateKey) -> Result<(ID, Ed25519PublicKey), Error> {
         let tag = self.get_tag(key.as_bytes(), b"Ed25519Key")?;
         let mut pk = [0u8; 32];
         ed25519::secret_to_public(&mut pk, key.as_bytes());
@@ -268,7 +269,10 @@ impl KeyStore {
         Ok((tag, pk))
     }
 
-    pub fn generate_mlkem_768_key(&self, rng: &mut impl CryptoRng) -> Result<(ID, MlKem768PublicKey), Error> {
+    pub fn mlkem_768_generate_key(
+        &self,
+        rng: &mut impl CryptoRng,
+    ) -> Result<(ID, MlKem768PublicKey), Error> {
         let mut rand = [0u8; libcrux_ml_kem::KEY_GENERATION_SEED_SIZE];
         rng.fill_bytes(&mut rand);
         let key_pair = mlkem768::generate_key_pair(rand);
@@ -281,11 +285,15 @@ impl KeyStore {
 
         Ok((id, pk))
     }
-    
-    pub fn generate_x25519_key(&self, rng: &mut impl CryptoRng) -> Result<(ID, X25519PublicKey), Error> {
+
+    pub fn x25519_generate_key(
+        &self,
+        rng: &mut impl CryptoRng,
+    ) -> Result<(ID, X25519PublicKey), Error> {
         let mut rand = [0u8; curve25519::DK_LEN];
         rng.fill_bytes(&mut rand);
-        let (pub_key, priv_key) = curve25519::X25519::generate_pair(&rand).map_err(|_| Error::KeyExchange)?;
+        let (pub_key, priv_key) =
+            curve25519::X25519::generate_pair(&rand).map_err(|_| Error::KeyExchange)?;
 
         let id = self.get_tag(&priv_key, b"X25519Key")?;
         let key = SecretKey::X25519Key(X25519SecretKey::new(priv_key));

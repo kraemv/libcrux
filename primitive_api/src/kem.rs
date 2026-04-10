@@ -74,7 +74,7 @@ impl DecapsKey for DecapsKeyID {
             get_agent_and_idx().ok_or_else(|| Error::InternalError("No agent available".into()))?;
         match Self::SCHEME {
             KemScheme::MlKem768 => agent
-                .generate_mlkem_768_key_id()
+                .mlkem_768_generate_key_id()
                 .map(|(id, pk)| {
                     (
                         Self {
@@ -87,7 +87,7 @@ impl DecapsKey for DecapsKeyID {
                 })
                 .map_err(|_| Error::KeyGenError),
             KemScheme::X25519 => agent
-                .generate_x25519_key_id()
+                .x25519_generate_key_id()
                 .map(|(id, pk)| {
                     (
                         Self {
@@ -107,10 +107,10 @@ impl DecapsKey for DecapsKeyID {
             .ok_or_else(|| Error::InternalError("No agent available".into()))?;
         let id = match (ct, self.scheme) {
             (EncapsulatedKey::MlKem768(ct), KemScheme::MlKem768) => agent
-                .decaps_for_mlkem768_id(self.id, *ct)
+                .mlkem_768_decaps_for_id(self.id, *ct)
                 .map_err(|_| Error::DecapsError),
             (EncapsulatedKey::X25519(ct), KemScheme::X25519) => agent
-                .derive_for_x25519_key_id(self.id, ct)
+                .x25519_derive_for_key_id(self.id, ct)
                 .map_err(|_| Error::DecapsError),
             _ => Err(Error::InvalidKey),
         }?;
@@ -127,15 +127,15 @@ impl EncapsKey for EncapsKeyType {
         let agent = get_agent().ok_or_else(|| Error::InternalError("No agent available".into()))?;
         let (id, ct) = match self {
             EncapsKeyType::MlKem768(key) => agent
-                .encaps_for_mlkem768_id(*key)
+                .mlkem_768_encaps_for_id(*key)
                 .map(|(shk, ct)| (shk, EncapsulatedKey::MlKem768(Box::new(ct))))
                 .map_err(|_| Error::EncapsError),
             EncapsKeyType::X25519(key) => {
                 let (sk, pk) = agent
-                    .generate_x25519_key_id()
+                    .x25519_generate_key_id()
                     .map_err(|_| Error::EncapsError)?;
                 agent
-                    .derive_for_x25519_key_id(sk, key)
+                    .x25519_derive_for_key_id(sk, key)
                     .map(|shk| (shk, EncapsulatedKey::X25519(pk)))
                     .map_err(|_| Error::EncapsError)
             }
@@ -159,7 +159,7 @@ impl DecapsKeyID {
         let (agent, agent_idx) =
             get_agent_and_idx().ok_or_else(|| Error::InternalError("No agent available".into()))?;
         agent
-            .generate_mlkem_768_key_id()
+            .mlkem_768_generate_key_id()
             .map(|(id, pk)| {
                 (
                     Self {
@@ -177,7 +177,7 @@ impl DecapsKeyID {
         let (agent, agent_idx) =
             get_agent_and_idx().ok_or_else(|| Error::InternalError("No agent available".into()))?;
         agent
-            .generate_x25519_key_id()
+            .x25519_generate_key_id()
             .map(|(id, pk)| {
                 (
                     Self {
@@ -206,8 +206,16 @@ impl fmt::Debug for EncapsKeyType {
 impl EncapsulatedKey {
     pub fn new(scheme: KemScheme, ct: &[u8]) -> Result<Self, Error> {
         match scheme {
-            KemScheme::X25519 => ct.try_into().map(|pk: &[u8; 32]| EncapsulatedKey::X25519(X25519PublicKey::new(*pk))).map_err(|_| Error::InputTooLarge),
-            KemScheme::MlKem768 => ct.try_into().map(|ct: &[u8; 1088]| EncapsulatedKey::MlKem768(Box::new(mlkem768::MlKem768Ciphertext::from(*ct)))).map_err(|_| Error::InputTooLarge),
+            KemScheme::X25519 => ct
+                .try_into()
+                .map(|pk: &[u8; 32]| EncapsulatedKey::X25519(X25519PublicKey::new(*pk)))
+                .map_err(|_| Error::InputTooLarge),
+            KemScheme::MlKem768 => ct
+                .try_into()
+                .map(|ct: &[u8; 1088]| {
+                    EncapsulatedKey::MlKem768(Box::new(mlkem768::MlKem768Ciphertext::from(*ct)))
+                })
+                .map_err(|_| Error::InputTooLarge),
         }
     }
 }

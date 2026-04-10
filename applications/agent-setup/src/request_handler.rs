@@ -6,8 +6,8 @@ use zerocopy::*;
 
 use crate::Error;
 use libcrux_agent::key_store::*;
-use libcrux_agent::signing_messages::*;
 use libcrux_agent::signatures::*;
+use libcrux_agent::signing_messages::*;
 
 use std::env;
 use std::fmt::Write as fmtWrite;
@@ -90,14 +90,14 @@ fn register_key(id: &ID, key_bytes: &[u8], key_label: &[u8]) -> Result<(), Error
 
 fn import_ecdsa_p256_key(key: EcDsaP256PrivateKey) -> Result<EcDsaP256SetupResponse, Error> {
     let key_bytes = *key.as_bytes();
-    let (id, pk) = KEY_STORE.add_ecdsa_p256_key(key)?;
+    let (id, pk) = KEY_STORE.ecdsa_p256_add_key(key)?;
     register_key(&id, &key_bytes, b"ECDSA_NISTP256_SHA256")?;
     Ok(EcDsaP256SetupResponse::new(id, pk))
 }
 
 fn import_ed25519_key(key: Ed25519PrivateKey) -> Result<Ed25519SetupResponse, Error> {
     let key_bytes = *key.as_bytes();
-    let (id, pk) = KEY_STORE.add_ed25519_key(key)?;
+    let (id, pk) = KEY_STORE.ed25519_add_key(key)?;
     register_key(&id, &key_bytes, b"ED25519")?;
     Ok(Ed25519SetupResponse::new(id, pk))
 }

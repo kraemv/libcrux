@@ -59,7 +59,10 @@ impl EcDsaP256PublicKey {
 impl Clone for EcDsaP256PublicKey {
     fn clone(&self) -> Self {
         let key = ecdsa::p256::PublicKey::try_from(&self.get_key().0).unwrap();
-        Self { key, alg: self.get_alg() }
+        Self {
+            key,
+            alg: self.get_alg(),
+        }
     }
 }
 
