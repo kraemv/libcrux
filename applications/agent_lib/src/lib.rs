@@ -21,9 +21,9 @@ pub type ID = [u8; 32];
 pub type SharedKey = [u8; 32];
 
 pub mod agent;
-pub mod key_store;
 pub mod kex_messages;
+pub mod key_store;
 pub mod kx;
-pub mod signing_messages;
 pub mod messages;
 pub mod signatures;
+pub mod signing_messages;

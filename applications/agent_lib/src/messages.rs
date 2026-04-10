@@ -1,8 +1,8 @@
+use crate::kex_messages::*;
+use crate::signing_messages::*;
 use crate::Error;
 use crate::ID;
 use zerocopy::*;
-use crate::signing_messages::*;
-use crate::kex_messages::*;
 
 #[derive(PartialEq, Eq, IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
 #[repr(u8)]
@@ -46,7 +46,7 @@ pub struct ExportResponse {
 
 impl ExportResponse {
     pub fn new(shk: [u8; 32]) -> Self {
-        Self{shk}
+        Self { shk }
     }
 
     pub fn get_shk(&self) -> &[u8; 32] {
@@ -59,7 +59,7 @@ impl From<ExportRequest> for IPCRequest {
         let payload = request.get_id().to_vec();
         let response_len: u32 = payload.len().try_into().unwrap();
         let header = IPCMessageHeader {
-            kind: MessageKind::EcDsaP256Sign,
+            kind: MessageKind::Export,
             response_len,
         };
         Self { header, payload }

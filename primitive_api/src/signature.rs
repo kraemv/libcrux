@@ -6,7 +6,7 @@
 use core::fmt::Debug;
 
 use crate::provider::get_agent;
-use libcrux_agent::{ID, signatures};
+use libcrux_agent::{signatures, ID};
 use libcrux_ecdsa as ecdsa;
 use libcrux_ecdsa::DigestAlgorithm;
 use libcrux_ed25519 as ed25519;
@@ -103,10 +103,10 @@ impl SigningKey for SigningKeyID {
         let agent = get_agent().ok_or_else(|| Error::InternalError("No agent available".into()))?;
         match self.scheme {
             SignatureScheme::EcDsaP256(DigestAlgorithm::Sha256) => agent
-                .sign_for_ecdsa_p256_id(self.id, payload.to_vec())
+                .ecdsa_p256_sign_for_id(self.id, payload.to_vec())
                 .map(Signature::EcDsaP256),
             SignatureScheme::Ed25519 => agent
-                .sign_for_ed25519_id(self.id, payload.to_vec())
+                .ed25519_sign_for_id(self.id, payload.to_vec())
                 .map(Signature::Ed25519),
             _ => return Err(Error::InvalidKey),
         }

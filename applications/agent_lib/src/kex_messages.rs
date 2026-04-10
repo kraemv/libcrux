@@ -1,25 +1,25 @@
+use crate::kx::{self, X25519PublicKey};
+use crate::ID;
 use libcrux_ml_kem::mlkem768::MlKem768PublicKey;
 use zerocopy::*;
-use crate::{kx::{self, X25519PublicKey}};
-use crate::ID;
 
 #[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
 #[repr(C)]
-pub struct X25519DeriveRequest{
+pub struct X25519DeriveRequest {
     id: ID,
     key: kx::X25519PublicKey,
 }
 
 #[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
 #[repr(C)]
-pub struct MlKem768DecapsRequest{
+pub struct MlKem768DecapsRequest {
     id: ID,
     ct: kx::MlKem768Ciphertext,
 }
 
 #[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
 #[repr(C)]
-pub struct MlKem768EncapsRequest{
+pub struct MlKem768EncapsRequest {
     key: kx::MlKem768PublicKey,
 }
 
