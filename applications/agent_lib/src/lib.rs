@@ -17,7 +17,8 @@ pub enum Error {
     Unsupported,
 }
 
-type ID = [u8; 32];
+pub type ID = [u8; 32];
+pub type SharedKey = [u8; 32];
 
 pub mod agent;
 pub mod key_store;

@@ -6,7 +6,7 @@
 use core::fmt::Debug;
 
 use crate::provider::get_agent;
-use libcrux_agent::signatures;
+use libcrux_agent::{ID, signatures};
 use libcrux_ecdsa as ecdsa;
 use libcrux_ecdsa::DigestAlgorithm;
 use libcrux_ed25519 as ed25519;
@@ -65,7 +65,7 @@ pub enum Signature {
 
 #[derive(Clone, Debug)]
 pub struct SigningKeyID {
-    id: [u8; 32],
+    id: ID,
     scheme: SignatureScheme,
     public_key: VerificationKeyType,
 }
@@ -87,7 +87,7 @@ impl Signature {
 }
 
 impl SigningKeyID {
-    pub fn new(id: [u8; 32], scheme: SignatureScheme, public_key: VerificationKeyType) -> Self {
+    pub fn new(id: ID, scheme: SignatureScheme, public_key: VerificationKeyType) -> Self {
         Self {
             id,
             scheme,

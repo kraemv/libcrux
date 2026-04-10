@@ -1,4 +1,5 @@
 use base64ct::{Base64, Encoding};
+use libcrux_agent::ID;
 use rand::rand_core::{OsRng, TryRngCore};
 use std::sync::LazyLock;
 use zerocopy::*;
@@ -67,7 +68,7 @@ fn init_agent() -> Result<(), Error> {
     Ok(())
 }
 
-fn register_key(id: &[u8; 32], key_bytes: &[u8], key_label: &[u8]) -> Result<(), Error> {
+fn register_key(id: &ID, key_bytes: &[u8], key_label: &[u8]) -> Result<(), Error> {
     let (root_file, key_path, key_file, _) = agent_paths(id);
 
     let mut enc_id = [0u8; 44];

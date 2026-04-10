@@ -21,10 +21,6 @@ pub struct X25519PublicKey([u8; 32]);
 #[repr(C)]
 pub struct X25519SecretKey([u8; 32]);
 
-#[derive(PartialEq, Eq)]
-#[repr(C)]
-pub struct X25519SharedSecret([u8; 32]);
-
 impl MlKem768PublicKey {
     pub fn new(bytes: [u8; 1184]) -> Self { Self(bytes) }
     pub fn as_bytes(&self) -> &[u8; 1184] { &self.0 }
@@ -43,15 +39,10 @@ impl X25519PublicKey {
 impl X25519SecretKey {
     pub fn new(bytes: [u8; 32]) -> Self { Self(bytes) }
     pub fn as_bytes(&self) -> &[u8; 32] { &self.0 }
-    pub fn derive(&self, pk: &X25519PublicKey) -> Result<X25519SharedSecret, crate::Error> {
+    pub fn derive(&self, pk: &X25519PublicKey) -> Result<[u8; 32], crate::Error> {
         curve25519::X25519::derive_ecdh(&pk.0, &self.0)
-            .map(X25519SharedSecret)
             .map_err(|_| Error::Derive)
     }
-}
-
-impl X25519SharedSecret {
-    pub fn as_bytes(&self) -> &[u8; 32] { &self.0 }
 }
 
 impl From<[u8; 1184]> for MlKem768PublicKey {
