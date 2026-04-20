@@ -1,6 +1,9 @@
 pub mod kem;
+pub mod nike;
 mod provider;
 pub mod signature;
+
+pub type SharedKey = [u8; 32];
 /*
 Desired primitives / functionalities:
     All functions return a result

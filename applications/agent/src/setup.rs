@@ -30,4 +30,6 @@ pub(crate) fn do_setup() {
 
         assert!(mlockall(MCL_FUTURE) == 0);
     }
+
+    // TODO: Maybe add cap here?
 }

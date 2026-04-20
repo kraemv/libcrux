@@ -210,7 +210,7 @@ impl Agent {
 
     pub fn mlkem_768_encaps_for_id(
         &self,
-        pk: LibcruxMlKem768PublicKey,
+        pk: &LibcruxMlKem768PublicKey,
     ) -> Result<(ID, LibcruxMlKem768Ciphertext), Error> {
         let pk = MlKem768PublicKey::new(*pk.as_slice());
         let response = self.send_recv(IPCRequest::from(MlKem768EncapsRequest::new(pk)))?;

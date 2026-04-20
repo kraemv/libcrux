@@ -36,7 +36,7 @@ pub fn x25519_derive_for_key_id(id: ID, pk: &X25519PublicKey) -> Result<ID, Erro
     EPHEMERAL_KEY_STORE.x25519_derive_for_id(id, pk)
 }
 
-pub fn mlkem_768_decaps_for_id(id: ID, ct: &mlkem768::MlKem768Ciphertext) -> Result<ID, Error> {
+pub fn mlkem_768_decaps_for_id(id: ID, ct: mlkem768::MlKem768Ciphertext) -> Result<ID, Error> {
     EPHEMERAL_KEY_STORE.mlkem_768_decaps_for_id(id, ct)
 }
 

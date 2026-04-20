@@ -83,7 +83,7 @@ pub(crate) fn handle_mlkem768_decaps(
 ) -> Result<IPCResponse, Error> {
     let ct =
         libcrux_ml_kem::mlkem768::MlKem768Ciphertext::from(request.get_ciphertext().as_bytes());
-    mlkem_768_decaps_for_id(*request.get_id(), &ct)
+    mlkem_768_decaps_for_id(*request.get_id(), ct)
         .map(|shk| IPCResponse::from(MlKem768DecapsResponse::new(shk)))
 }
 
