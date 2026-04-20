@@ -179,12 +179,12 @@ impl KeyStore {
     pub fn mlkem_768_decaps_for_id(
         &self,
         id: ID,
-        ct: &mlkem768::MlKem768Ciphertext,
+        ct: mlkem768::MlKem768Ciphertext,
     ) -> Result<ID, Error> {
         let shared_key = {
             let entries = self.entries.read().map_err(|_| Error::Derive)?;
             match entries.get(&id).ok_or(Error::UnknownID)?.get_key() {
-                SecretKey::MlKem768Key(key) => Ok(mlkem768::decapsulate(key, ct)),
+                SecretKey::MlKem768Key(key) => Ok(mlkem768::decapsulate(key, &ct)),
                 _ => Err(Error::Derive),
             }?
         };
