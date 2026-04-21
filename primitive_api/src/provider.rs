@@ -19,7 +19,7 @@ static AGENTS: LazyLock<Vec<Mutex<Agent>>> = LazyLock::new(|| {
 });
 
 pub fn get_agent() -> Option<MutexGuard<'static, Agent>> {
-    AGENTS.iter().find_map(|agent| agent.try_lock().ok())
+    AGENTS.iter().find_map(|agent| agent.try_lock().ok()) // TODO: Add Retry logic
 }
 
 pub fn get_agent_and_idx() -> Option<(MutexGuard<'static, Agent>, usize)> {

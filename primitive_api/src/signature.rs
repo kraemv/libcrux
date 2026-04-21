@@ -6,6 +6,7 @@
 use core::fmt::Debug;
 
 use crate::provider::get_agent;
+use libcrux_agent::signatures::{EcDsaP256Signature, Ed25519Signature};
 use libcrux_agent::{signatures, ID};
 use libcrux_ecdsa as ecdsa;
 use libcrux_ecdsa::DigestAlgorithm;
@@ -22,18 +23,37 @@ pub enum Error {
     InputTooLarge,
 }
 
-// A private key that can be used to craft a signature
-pub trait SigningKey: Send + Sync {
-    type PublicKey: VerificationKey;
+pub trait Sig {}
+pub struct Ed25519{}
+pub struct EcDsaP256{}
+
+impl Sig for Ed25519 {}
+impl Sig for EcDsaP256 {}
+
+/// Minimal example:
+/// ```
+/// use libcrux_primitive_api::signature::*;
+/// 
+/// let (sk, pk) = SigningKeyType::keygen().expect("Keygen failed");
+/// 
+/// let msg = [0u8; 32];
+/// let sig = sk.sign(&msg).expect("Signing failed");
+/// 
+/// pk.verify(&msg, sig).expect("Invalid signature or verification error");
+/// ```
+pub trait SigningKey<Scheme: Sig = Ed25519>: Send + Sync + Sized {
+    type PublicKey: VerificationKey + Sized;
+    // const SCHEME: SignatureScheme;
+
+    fn keygen() -> Result<(Self, Self::PublicKey), Error> {
+        todo!()
+    }
 
     // A signing key can sign given a message, extra parameters and a randomness source
     fn sign(&self, payload: &[u8]) -> Result<Signature, Error>;
 
     // Get the public key belonging to this Signing Key
     fn to_public(&self) -> &Self::PublicKey;
-
-    // Get the scheme this key is for
-    fn scheme(&self) -> SignatureScheme;
 }
 
 // A public key to verify a signature
@@ -66,7 +86,6 @@ pub enum Signature {
 #[derive(Clone, Debug)]
 pub struct SigningKeyID {
     id: ID,
-    scheme: SignatureScheme,
     public_key: VerificationKeyType,
 }
 
@@ -87,38 +106,71 @@ impl Signature {
 }
 
 impl SigningKeyID {
-    pub fn new(id: ID, scheme: SignatureScheme, public_key: VerificationKeyType) -> Self {
+    pub fn new(id: ID, public_key: VerificationKeyType) -> Self {
         Self {
             id,
-            scheme,
             public_key,
         }
     }
 }
 
-impl SigningKey for SigningKeyID {
+impl SigningKey<Ed25519> for SigningKeyID {
     type PublicKey = VerificationKeyType;
+
+    // const SCHEME: SignatureScheme = SignatureScheme::EcDsaP256(DigestAlgorithm::Sha256);
 
     fn sign(&self, payload: &[u8]) -> Result<Signature, Error> {
         let agent = get_agent().ok_or_else(|| Error::InternalError("No agent available".into()))?;
-        match self.scheme {
-            SignatureScheme::EcDsaP256(DigestAlgorithm::Sha256) => agent
-                .ecdsa_p256_sign_for_id(self.id, payload.to_vec())
-                .map(Signature::EcDsaP256),
-            SignatureScheme::Ed25519 => agent
-                .ed25519_sign_for_id(self.id, payload.to_vec())
-                .map(Signature::Ed25519),
-            _ => return Err(Error::InvalidKey),
-        }
-        .map_err(|_| Error::InternalError("Agent signing failed".into()))
+        agent
+            .ed25519_sign_for_id(self.id, payload.to_vec())
+            .map(Signature::Ed25519)
+            .map_err(|_| Error::InternalError("Agent signing failed".into()))
     }
 
     fn to_public(&self) -> &Self::PublicKey {
         &self.public_key
     }
+}
 
-    fn scheme(&self) -> SignatureScheme {
-        self.scheme
+use rand_chacha::ChaChaRng;
+use rand_chacha::rand_core::SeedableRng;
+use libcrux_ecdsa::p256 as p256;
+
+pub enum SigningKeyType {
+    Ed25519(libcrux_ed25519::SigningKey),
+    EcDsaP256(libcrux_ecdsa::p256::PrivateKey)
+}
+
+impl SigningKey<Ed25519> for SigningKeyType {
+    type PublicKey = VerificationKeyType;
+
+    fn keygen() -> Result<(Self, Self::PublicKey), Error> {
+        let mut rng = ChaChaRng::from_os_rng();
+        ed25519::generate_key_pair(&mut rng)
+            .map(|(sk, pk)| (sk, signatures::Ed25519PublicKey::new(pk)))
+            .map(|(sk, pk)| (SigningKeyType::Ed25519(sk), VerificationKeyType::Ed25519(pk)))
+            .map_err(|_| Error::KeyGenError)
+    }
+
+    fn sign(&self, payload: &[u8]) -> Result<Signature, Error> {
+        match &self {
+            Self::EcDsaP256(key) => {
+                let mut rng = ChaChaRng::from_os_rng();
+                let nonce = p256::Nonce::random(&mut rng).map_err(|_| Error::SigningError)?;
+                p256::sign(DigestAlgorithm::Sha256, payload, key, &nonce)
+                    .map_err(|_| Error::SigningError)
+                    .map(|sig| Signature::EcDsaP256(EcDsaP256Signature::new(sig, DigestAlgorithm::Sha256)))
+            }
+            Self::Ed25519(private_key) =>
+                ed25519::sign(payload, private_key.as_ref())
+                    .map_err(|_| Error::SigningError)
+                    .map(|sig| Signature::Ed25519(Ed25519Signature::new(sig))),
+        }
+        .map_err(|_| Error::InternalError("Agent signing failed".into()))
+    }
+
+    fn to_public(&self) -> &Self::PublicKey {
+        unimplemented!()
     }
 }
 
