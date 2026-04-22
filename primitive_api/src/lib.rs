@@ -1,6 +1,7 @@
 pub mod kem;
 pub mod nike;
 mod provider;
+mod libcrux_provider;
 pub mod signature;
 
 pub type SharedKey = [u8; 32];
