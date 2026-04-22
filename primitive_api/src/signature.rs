@@ -4,11 +4,12 @@
 //! * EdDSA 25519
 
 use core::fmt::Debug;
+use std::marker::PhantomData;
 
 use crate::provider::get_agent;
-use libcrux_agent::signatures::{EcDsaP256Signature, Ed25519Signature};
+use libcrux_agent::signatures::{EcDsaP256PublicKey, Ed25519PublicKey};
 use libcrux_agent::{signatures, ID};
-use libcrux_ecdsa as ecdsa;
+use libcrux_ecdsa::p256;
 use libcrux_ecdsa::DigestAlgorithm;
 use libcrux_ed25519 as ed25519;
 
@@ -25,6 +26,7 @@ pub enum Error {
     InputTooLarge,
     Verify
 }
+
 pub trait Sig {}
 pub struct Ed25519{}
 pub struct EcDsaP256{}
@@ -60,28 +62,27 @@ impl Sig for EcDsaP256 {}
 /// Length requirements for variable length input/output schemes
 /// 
 /// In future: Default is PQ
-pub trait SigningKey<Scheme: Sig = Ed25519>: Send + Sync + Sized {
+pub trait SigningKey: Send + Sync + Sized {
     type PublicKey: VerificationKey + Sized;
-    // const SCHEME: SignatureScheme;
+    type Signature;
 
     fn keygen() -> Result<(Self, Self::PublicKey), Error> {
         todo!()
     }
 
     // A signing key can sign given a message, extra parameters and a randomness source
-    fn sign(&self, payload: &[u8]) -> Result<Signature, Error>;
+    fn sign(&self, payload: &[u8]) -> Result<Self::Signature, Error>;
 
     // Get the public key belonging to this Signing Key
     fn to_public(&self) -> &Self::PublicKey;
 }
 
 // A public key to verify a signature
-pub trait VerificationKey<Scheme: Sig = Ed25519>: Debug + Send + Sync {
-    type VerificationError: Debug;
+pub trait VerificationKey: Debug + Send + Sync {
     type Signature;
 
     // Check if the signature is valid for the given payload and key
-    fn verify(&self, payload: &[u8], signature: Self::Signature) -> Result<(), Self::VerificationError>;
+    fn verify(&self, payload: &[u8], signature: Self::Signature) -> Result<(), Error>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -90,25 +91,20 @@ pub enum SignatureScheme {
     Ed25519,
 }
 
-#[derive(Clone, Debug)]
-pub enum VerificationKeyType {
-    EcDsaP256(signatures::EcDsaP256PublicKey),
-    Ed25519(signatures::Ed25519PublicKey),
-}
-
 // A signature that holds its actual value and additional information
-pub enum Signature {
+/*pub enum Signature {
     EcDsaP256(signatures::EcDsaP256Signature),
     Ed25519(signatures::Ed25519Signature),
-}
+}*/
 
 #[derive(Clone, Debug)]
-pub struct SigningKeyID {
+pub struct SigningKeyID<Scheme: Sig, Vk: VerificationKey> {
     id: ID,
-    public_key: VerificationKeyType,
+    public_key: Vk,
+    marker: PhantomData<Scheme>,
 }
 
-impl Signature {
+/*impl Signature {
     /// Convert the signature into a raw byte vector.
     ///
     /// * NIST P Curve signatures are returned as `r || s`.
@@ -122,25 +118,36 @@ impl Signature {
             Signature::Ed25519(s) => s.as_bytes().to_vec(),
         }
     }
-}
+}*/
 
-impl SigningKeyID {
-    pub fn new(id: ID, public_key: VerificationKeyType) -> Self {
+impl SigningKeyID<EcDsaP256, EcDsaP256PublicKey> {
+    pub fn new(id: ID, public_key: EcDsaP256PublicKey) -> Self {
         Self {
             id,
             public_key,
+            marker: PhantomData,
         }
     }
 }
 
-/*impl SigningKey<Ed25519> for SigningKeyID {
-    type PublicKey = VerificationKeyType;
+impl SigningKeyID<Ed25519, Ed25519PublicKey> {
+    pub fn new(id: ID, public_key: Ed25519PublicKey) -> Self {
+        Self {
+            id,
+            public_key,
+            marker: PhantomData,
+        }
+    }
+}
 
-    fn sign(&self, payload: &[u8]) -> Result<Signature, Error> {
+impl SigningKey for SigningKeyID<Ed25519, Ed25519PublicKey> {
+    type PublicKey = Ed25519PublicKey;
+    type Signature = signatures::Ed25519Signature;
+
+    fn sign(&self, payload: &[u8]) -> Result<Self::Signature, Error> {
         let agent = get_agent().ok_or_else(|| Error::InternalError("No agent available".into()))?;
         agent
             .ed25519_sign_for_id(self.id, payload.to_vec())
-            .map(Signature::Ed25519)
             .map_err(|_| Error::InternalError("Agent signing failed".into()))
     }
 
@@ -149,23 +156,64 @@ impl SigningKeyID {
     }
 }
 
-impl SigningKey<EcDsaP256> for SigningKeyID {
-    type PublicKey = VerificationKeyType;
+impl SigningKey for SigningKeyID<EcDsaP256, EcDsaP256PublicKey> {
+    type PublicKey = EcDsaP256PublicKey;
+    type Signature = signatures::EcDsaP256Signature;
 
-    fn sign(&self, payload: &[u8]) -> Result<Signature, Error> {
+    fn sign(&self, payload: &[u8]) -> Result<Self::Signature, Error> {
         let agent = get_agent().ok_or_else(|| Error::InternalError("No agent available".into()))?;
         agent
             .ecdsa_p256_sign_for_id(self.id, payload.to_vec())
-            .map(Signature::EcDsaP256)
             .map_err(|_| Error::InternalError("Agent signing failed".into()))
     }
 
     fn to_public(&self) -> &Self::PublicKey {
         &self.public_key
     }
-}*/
+}
 
+impl VerificationKey for Ed25519PublicKey {
+    type Signature = libcrux_agent::signatures::Ed25519Signature;
+
+    fn verify(&self, payload: &[u8], signature: Self::Signature) -> Result<(), Error> {
+        ed25519::verify(payload, &self.into_bytes(), signature.get_signature())
+            .map_err(Error::from)
+    }
+}
+
+impl VerificationKey for EcDsaP256PublicKey {
+    type Signature = libcrux_agent::signatures::EcDsaP256Signature;
+
+    fn verify(&self, payload: &[u8], signature: Self::Signature) -> Result<(), Error> {
+        p256::verify(DigestAlgorithm::Sha256, payload, &signature.get_signature(), self.get_key())
+            .map_err(Error::from)
+    }
+}
+
+impl From<libcrux_ecdsa::Error> for Error {
+    fn from(err: libcrux_ecdsa::Error) -> Self {
+        match err {
+            libcrux_ecdsa::Error::InvalidSignature => Error::InvalidSignature,
+            _ => Error::Verify,
+        }
+    }
+}
+
+impl From<libcrux_ed25519::Error> for Error {
+    fn from(err: libcrux_ed25519::Error) -> Self {
+        match err {
+            libcrux_ed25519::Error::InvalidSignature => Error::InvalidSignature,
+            _ => Error::Verify,
+        }
+    }
+}
 /*
+#[derive(Clone, Debug)]
+pub enum VerificationKeyType {
+    EcDsaP256(signatures::EcDsaP256PublicKey),
+    Ed25519(signatures::Ed25519PublicKey),
+}
+
 impl VerificationKey for VerificationKeyType {
     type VerificationError = Error;
 
@@ -176,7 +224,7 @@ impl VerificationKey for VerificationKeyType {
             VerificationKeyType::Ed25519(key) => key.verify(payload, signature),
         }
     }
-}*/
+}
 
 impl AsRef<[u8]> for VerificationKeyType {
     fn as_ref(&self) -> &[u8] {
@@ -185,4 +233,4 @@ impl AsRef<[u8]> for VerificationKeyType {
             VerificationKeyType::Ed25519(key) => key.as_bytes(),
         }
     }
-}
+}*/
