@@ -29,14 +29,14 @@ pub(crate) fn handle_request(request: &IPCSetupRequest) -> Result<IPCSetupRespon
     match request.get_type().get_type() {
         SetupMessageKind::AgentInit => Ok(IPCSetupResponse::from(&InitResult::from(init_agent()))),
         SetupMessageKind::EcDsaP256Key => {
-            let key = EcDsaP256SetupRequest::try_ref_from_bytes(request.get_payload())
+            let key = SetupRequest::<EcDsaP256SHA256>::try_ref_from_bytes(request.get_payload())
                 .map_err(|_| Error::MalformedRequest)?;
-            import_ecdsa_p256_key(key.try_into()?).map(|res| IPCSetupResponse::from(&res))
+            import_ecdsa_p256_key(key.get_private_key()?).map(|res| IPCSetupResponse::from(&res))
         }
         SetupMessageKind::Ed25519Key => {
-            let key = Ed25519SetupRequest::try_ref_from_bytes(request.get_payload())
+            let key = SetupRequest::<Ed25519>::try_ref_from_bytes(request.get_payload())
                 .map_err(|_| Error::MalformedRequest)?;
-            import_ed25519_key(key.into()).map(|res| IPCSetupResponse::from(&res))
+            import_ed25519_key(key.get_private_key()).map(|res| IPCSetupResponse::from(&res))
         }
     }
 }
@@ -88,16 +88,16 @@ fn register_key(id: &ID, key_bytes: &[u8], key_label: &[u8]) -> Result<(), Error
     Ok(())
 }
 
-fn import_ecdsa_p256_key(key: EcDsaP256PrivateKey) -> Result<EcDsaP256SetupResponse, Error> {
+fn import_ecdsa_p256_key(key: EcDsaP256PrivateKey<SHA256>) -> Result<SetupResponse<EcDsaP256PublicKey<SHA256>>, Error> {
     let key_bytes = *key.as_bytes();
     let (id, pk) = KEY_STORE.ecdsa_p256_add_key(key)?;
     register_key(&id, &key_bytes, b"ECDSA_NISTP256_SHA256")?;
-    Ok(EcDsaP256SetupResponse::new(id, pk))
+    Ok(SetupResponse::<EcDsaP256PublicKey<SHA256>>::new(id, pk))
 }
 
-fn import_ed25519_key(key: Ed25519PrivateKey) -> Result<Ed25519SetupResponse, Error> {
+fn import_ed25519_key(key: Ed25519PrivateKey) -> Result<SetupResponse<Ed25519PublicKey>, Error> {
     let key_bytes = *key.as_bytes();
     let (id, pk) = KEY_STORE.ed25519_add_key(key)?;
     register_key(&id, &key_bytes, b"ED25519")?;
-    Ok(Ed25519SetupResponse::new(id, pk))
+    Ok(SetupResponse::<Ed25519PublicKey>::new(id, pk))
 }

@@ -1,24 +1,32 @@
+use std::marker::PhantomData;
+
 use crate::Error;
 use libcrux_ecdsa as ecdsa;
 use libcrux_ed25519 as ed25519;
 use libcrux_sha2::Algorithm as DigestAlgorithm;
 use rand::CryptoRng;
 
+pub struct EcDsaP256SHA256 {}
+pub struct Ed25519 {}
+
+#[derive(Debug)]
+pub struct SHA256 {}
+
 // A signature that holds its actual value and additional information
-pub struct EcDsaP256Signature {
+pub struct EcDsaP256Signature<DigestAlg> {
     sig: ecdsa::p256::Signature,
-    alg: DigestAlgorithm,
+    _marker: PhantomData<DigestAlg>
 }
 
 #[derive(Debug)]
-pub struct EcDsaP256PublicKey {
+pub struct EcDsaP256PublicKey<DigestAlg> {
     key: ecdsa::p256::PublicKey,
-    alg: DigestAlgorithm,
+    _marker: PhantomData<DigestAlg>
 }
 
-pub struct EcDsaP256PrivateKey {
+pub struct EcDsaP256PrivateKey<DigestAlg> {
     key: ecdsa::p256::PrivateKey,
-    alg: DigestAlgorithm,
+    _marker: PhantomData<DigestAlg>
 }
 
 pub struct Ed25519PrivateKey(ed25519::SigningKey);
@@ -28,70 +36,82 @@ pub struct Ed25519PublicKey(ed25519::VerificationKey);
 
 pub struct Ed25519Signature(ed25519::Signature);
 
-impl EcDsaP256Signature {
-    pub fn new(sig: ecdsa::p256::Signature, alg: DigestAlgorithm) -> Self {
-        Self { sig, alg }
-    }
-
+impl<DigestAlg> EcDsaP256Signature<DigestAlg> {
     pub fn get_signature(&self) -> ecdsa::p256::Signature {
         self.sig
     }
+}
 
+impl EcDsaP256Signature<SHA256> {
     pub fn get_alg(&self) -> DigestAlgorithm {
-        self.alg
+        DigestAlgorithm::Sha256
     }
 }
 
-impl EcDsaP256PublicKey {
-    pub fn new(key: ecdsa::p256::PublicKey, alg: DigestAlgorithm) -> Self {
-        Self { key, alg }
+impl From<ecdsa::p256::Signature> for EcDsaP256Signature<SHA256> {
+    fn from(sig: ecdsa::p256::Signature) -> Self {
+        Self { sig, _marker: PhantomData }
     }
+}
 
-    pub fn get_alg(&self) -> DigestAlgorithm {
-        self.alg
-    }
-
+impl<DigestAlg> EcDsaP256PublicKey<DigestAlg> {
     pub fn get_key(&self) -> &ecdsa::p256::PublicKey {
         &self.key
     }
 }
 
-impl Clone for EcDsaP256PublicKey {
+impl EcDsaP256PublicKey<SHA256> {
+    pub fn get_alg(&self) -> DigestAlgorithm {
+        DigestAlgorithm::Sha256
+    }
+}
+
+impl From<ecdsa::p256::PublicKey> for EcDsaP256PublicKey<SHA256> {
+    fn from(vk: ecdsa::p256::PublicKey) -> Self {
+        Self { key: vk, _marker: PhantomData }
+    }
+}
+
+impl Clone for EcDsaP256PublicKey<SHA256> {
     fn clone(&self) -> Self {
         let key = ecdsa::p256::PublicKey::try_from(&self.get_key().0).unwrap();
         Self {
             key,
-            alg: self.get_alg(),
+            _marker: PhantomData,
         }
     }
 }
 
-impl EcDsaP256PrivateKey {
-    pub fn new(key: ecdsa::p256::PrivateKey, alg: DigestAlgorithm) -> Self {
-        Self { key, alg }
+impl From<ecdsa::p256::PrivateKey> for EcDsaP256PrivateKey<SHA256> {
+    fn from(sk: ecdsa::p256::PrivateKey) -> Self {
+        Self { key: sk, _marker: PhantomData }
     }
+}
 
-    pub fn sign(
-        &self,
-        message: &[u8],
-        rng: &mut impl CryptoRng,
-    ) -> Result<EcDsaP256Signature, Error> {
-        let nonce = ecdsa::p256::Nonce::random(rng).map_err(|_| Error::Signing)?;
-        let sig =
-            ecdsa::p256::sign(self.alg, message, &self.key, &nonce).map_err(|_| Error::Signing)?;
-        Ok(EcDsaP256Signature::new(sig, self.alg))
-    }
-
-    pub fn get_alg(&self) -> DigestAlgorithm {
-        self.alg
-    }
-
+impl <DigestAlg> EcDsaP256PrivateKey <DigestAlg> {
     pub fn get_key(&self) -> &ecdsa::p256::PrivateKey {
         &self.key
     }
 
     pub fn as_bytes(&self) -> &[u8; 32] {
         self.key.as_ref()
+    }
+}
+
+impl EcDsaP256PrivateKey<SHA256> {
+    pub fn sign(
+        &self,
+        message: &[u8],
+        rng: &mut impl CryptoRng,
+    ) -> Result<EcDsaP256Signature<SHA256>, Error> {
+        let nonce = ecdsa::p256::Nonce::random(rng).map_err(|_| Error::Signing)?;
+        let sig =
+            ecdsa::p256::sign(DigestAlgorithm::Sha256, message, &self.key, &nonce).map_err(|_| Error::Signing)?;
+        Ok(EcDsaP256Signature::<SHA256>::from(sig))
+    }
+
+    pub fn get_alg(&self) -> DigestAlgorithm {
+        DigestAlgorithm::Sha256
     }
 }
 

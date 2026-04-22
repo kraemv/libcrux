@@ -5,17 +5,19 @@ use libcrux_agent::kx::MlKem768Ciphertext;
 use libcrux_agent::messages::ExportRequest;
 use libcrux_agent::messages::ExportResponse;
 use libcrux_agent::messages::{IPCRequest, IPCResponse, MessageKind};
+use libcrux_agent::signatures::EcDsaP256SHA256;
+use libcrux_agent::signatures::Ed25519;
 use libcrux_agent::signing_messages::*;
 use zerocopy::*;
 
 pub(crate) fn handle_request(request: &IPCRequest) -> Result<IPCResponse, Error> {
     match request.get_type().get_type() {
         MessageKind::EcDsaP256Sign => {
-            let request = EcDsaP256SignRequest::try_from(request.get_payload())?;
+            let request = SignRequest::<EcDsaP256SHA256>::try_from(request.get_payload())?;
             handle_ecdsa_p256_sign_request(&request)
         }
         MessageKind::Ed25519Sign => {
-            let request = Ed25519SignRequest::try_from(request.get_payload())?;
+            let request = SignRequest::<Ed25519>::try_from(request.get_payload())?;
             handle_ed25519_sign_request(&request)
         }
 
@@ -51,17 +53,17 @@ pub(crate) fn handle_request(request: &IPCRequest) -> Result<IPCResponse, Error>
 }
 
 pub(crate) fn handle_ecdsa_p256_sign_request(
-    request: &EcDsaP256SignRequest,
+    request: &SignRequest<EcDsaP256SHA256>,
 ) -> Result<IPCResponse, Error> {
     ecdsa_p256_sign_for_id(*request.get_id(), request.get_payload())
-        .map(|sig| IPCResponse::from(EcDsaP256SignResponse::from(sig)))
+        .map(|sig| IPCResponse::from(SignResponse::<EcDsaP256SHA256>::from(sig)))
 }
 
 pub(crate) fn handle_ed25519_sign_request(
-    request: &Ed25519SignRequest,
+    request: &SignRequest<Ed25519>,
 ) -> Result<IPCResponse, Error> {
     ed25519_sign_for_id(*request.get_id(), request.get_payload())
-        .map(|sig| IPCResponse::from(Ed25519SignResponse::from(sig)))
+        .map(|sig| IPCResponse::from(SignResponse::<Ed25519>::from(sig)))
 }
 
 pub(crate) fn handle_x25519_key_gen() -> Result<IPCResponse, Error> {

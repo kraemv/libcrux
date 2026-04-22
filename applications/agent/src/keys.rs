@@ -1,10 +1,7 @@
 // use crate::signature::{DigestAlgorithm, EcDsaP256PrivKey, EcDsaP256PrivateKey, Error, Signature, SigningKey, SigningKeyType, VerificationKeyType};
 use crate::{Error, RNG};
 use libcrux_agent::{
-    key_store::KeyStore,
-    kx::{MlKem768PublicKey, X25519PublicKey},
-    signatures::{EcDsaP256Signature, Ed25519Signature},
-    SharedKey, ID,
+    ID, SharedKey, key_store::KeyStore, kx::{MlKem768PublicKey, X25519PublicKey}, signatures::{EcDsaP256Signature, Ed25519Signature, SHA256}
 };
 use libcrux_ml_kem::mlkem768;
 use std::sync::LazyLock;
@@ -16,7 +13,7 @@ static EPHEMERAL_KEY_STORE: LazyLock<KeyStore> = LazyLock::new(|| {
     KeyStore::new(&mut RNG.write().unwrap()).expect("Failed to initialize KeyStore")
 });
 
-pub fn ecdsa_p256_sign_for_id(id: ID, message: &[u8]) -> Result<EcDsaP256Signature, Error> {
+pub fn ecdsa_p256_sign_for_id(id: ID, message: &[u8]) -> Result<EcDsaP256Signature<SHA256>, Error> {
     KEY_STORE.ecdsa_p256_sign_for_id(id, message, &mut RNG.write().unwrap())
 }
 

@@ -1,4 +1,6 @@
 use crate::kex_messages::*;
+use crate::signatures::EcDsaP256SHA256;
+use crate::signatures::Ed25519;
 use crate::signing_messages::*;
 use crate::Error;
 use crate::ID;
@@ -135,8 +137,8 @@ impl IPCRequest {
     }
 }
 
-impl From<EcDsaP256SignRequest> for IPCRequest {
-    fn from(request: EcDsaP256SignRequest) -> Self {
+impl From<SignRequest<'_, EcDsaP256SHA256>> for IPCRequest {
+    fn from(request: SignRequest<EcDsaP256SHA256>) -> Self {
         let payload = Vec::<u8>::from(request);
         let response_len: u32 = payload.len().try_into().unwrap();
         let header = IPCMessageHeader {
@@ -147,8 +149,9 @@ impl From<EcDsaP256SignRequest> for IPCRequest {
     }
 }
 
-impl From<Ed25519SignRequest> for IPCRequest {
-    fn from(request: Ed25519SignRequest) -> Self {
+
+impl From<SignRequest<'_, Ed25519>> for IPCRequest {
+    fn from(request: SignRequest<Ed25519>) -> Self {
         let payload = Vec::<u8>::from(request);
         let response_len: u32 = payload.len().try_into().unwrap();
         let header = IPCMessageHeader {
@@ -208,8 +211,8 @@ impl TryFrom<&[u8]> for IPCResponse {
     }
 }
 
-impl From<EcDsaP256SignResponse> for IPCResponse {
-    fn from(value: EcDsaP256SignResponse) -> Self {
+impl From<SignResponse<EcDsaP256SHA256>> for IPCResponse {
+    fn from(value: SignResponse<EcDsaP256SHA256>) -> Self {
         let payload = value.as_bytes().to_vec();
         let payload_len: u32 = payload
             .len()
@@ -220,8 +223,8 @@ impl From<EcDsaP256SignResponse> for IPCResponse {
     }
 }
 
-impl From<Ed25519SignResponse> for IPCResponse {
-    fn from(value: Ed25519SignResponse) -> Self {
+impl From<SignResponse<Ed25519>> for IPCResponse {
+    fn from(value: SignResponse<Ed25519>) -> Self {
         let payload = value.as_bytes().to_vec();
         let payload_len: u32 = payload
             .len()

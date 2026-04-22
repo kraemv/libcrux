@@ -9,7 +9,6 @@ use libcrux_ecdsa as ecdsa;
 use libcrux_ed25519 as ed25519;
 use libcrux_kmac as kmac;
 use libcrux_ml_kem::mlkem768;
-use libcrux_sha2::Algorithm as DigestAlgorithm;
 use rand::CryptoRng;
 use std::collections::HashMap;
 use std::fmt::Write as fmtWrite;
@@ -18,6 +17,12 @@ use std::fs;
 use std::path::Path;
 use std::string::String;
 use std::sync::{Arc, RwLock};
+
+const SHARED_KEY_LABEL: &[u8; 9] = b"SharedKey";
+const ECDSA_P256_LABEL: &[u8; 12] = b"EcDsaP256Key";
+const ED25519_LABEL: &[u8; 10] = b"Ed25519Key";
+const MLKEM_768_LABEL: &[u8; 11] = b"MlKem768Key";
+const X25519_LABEL: &[u8; 9] = b"X25519Key";
 
 fn encode_hex(bytes: &[u8]) -> String {
     let mut s = String::with_capacity(bytes.len() * 2);
@@ -28,7 +33,7 @@ fn encode_hex(bytes: &[u8]) -> String {
 }
 
 pub enum SecretKey {
-    EcDsaP256Key(EcDsaP256PrivateKey),
+    EcDsaP256Key(EcDsaP256PrivateKey<SHA256>),
     Ed25519Key(Ed25519PrivateKey),
     // SessionTicket(SessionTicket),
     MlKem768Key(Arc<mlkem768::MlKem768PrivateKey>),
@@ -37,7 +42,7 @@ pub enum SecretKey {
 }
 
 pub enum PublicKey {
-    EcDsaP256Key(EcDsaP256PublicKey),
+    EcDsaP256Key(EcDsaP256PublicKey<SHA256>),
     Ed25519Key(Ed25519PublicKey),
 }
 
@@ -116,7 +121,7 @@ impl KeyStore {
                 b"ECDSA_NISTP256_SHA256" => {
                     let private_key = ecdsa::p256::PrivateKey::try_from(key_bytes.as_slice())
                         .map_err(|_| Error::Encoding)?;
-                    let ecdsa_key = EcDsaP256PrivateKey::new(private_key, DigestAlgorithm::Sha256);
+                    let ecdsa_key = EcDsaP256PrivateKey::<SHA256>::from(private_key);
                     store
                         .ecdsa_p256_add_key(ecdsa_key)
                         .map(|(id, key)| (id, PublicKey::EcDsaP256Key(key)))
@@ -169,7 +174,7 @@ impl KeyStore {
                 _ => Err(Error::Derive),
             }?
         };
-        let tag = self.get_tag(&shared_key, b"SharedSecret")?;
+        let tag = self.get_tag(&shared_key, SHARED_KEY_LABEL)?;
         let entry = KeyStoreEntry::new(tag, SecretKey::SharedSecret(shared_key));
         self.add_entry(entry);
 
@@ -189,7 +194,7 @@ impl KeyStore {
             }?
         };
 
-        let tag = self.get_tag(shared_key.as_slice(), b"SharedSecret")?;
+        let tag = self.get_tag(shared_key.as_slice(), SHARED_KEY_LABEL)?;
         let entry = KeyStoreEntry::new(tag, SecretKey::SharedSecret(shared_key));
         self.add_entry(entry);
 
@@ -205,7 +210,7 @@ impl KeyStore {
         rng.fill_bytes(&mut rand);
         let (ct, shared_key) = mlkem768::encapsulate(pk, rand);
 
-        let tag = self.get_tag(shared_key.as_slice(), b"SharedSecret")?;
+        let tag = self.get_tag(shared_key.as_slice(), SHARED_KEY_LABEL)?;
         let entry = KeyStoreEntry::new(tag, SecretKey::SharedSecret(shared_key));
         self.add_entry(entry);
 
@@ -225,7 +230,7 @@ impl KeyStore {
         id: ID,
         message: &[u8],
         rng: &mut impl CryptoRng,
-    ) -> Result<EcDsaP256Signature, Error> {
+    ) -> Result<EcDsaP256Signature<SHA256>, Error> {
         let entries = self.entries.read().map_err(|_| Error::Signing)?;
         match entries.get(&id).ok_or(Error::UnknownID)?.get_key() {
             SecretKey::EcDsaP256Key(key) => key.sign(message, rng),
@@ -243,12 +248,12 @@ impl KeyStore {
 
     pub fn ecdsa_p256_add_key(
         &self,
-        key: EcDsaP256PrivateKey,
-    ) -> Result<(ID, EcDsaP256PublicKey), Error> {
-        let tag = self.get_tag(key.as_bytes(), b"EcDsaP256Key")?;
+        key: EcDsaP256PrivateKey<SHA256>,
+    ) -> Result<(ID, EcDsaP256PublicKey<SHA256>), Error> {
+        let tag = self.get_tag(key.as_bytes(), ECDSA_P256_LABEL)?;
 
         let pk = ecdsa::p256::secret_to_public(key.get_key()).map_err(|_| Error::PublicKey)?;
-        let pk = EcDsaP256PublicKey::new(pk, key.get_alg());
+        let pk = EcDsaP256PublicKey::<SHA256>::from(pk);
 
         let entry = KeyStoreEntry::new(tag, SecretKey::EcDsaP256Key(key));
         self.add_entry(entry);
@@ -257,7 +262,7 @@ impl KeyStore {
     }
 
     pub fn ed25519_add_key(&self, key: Ed25519PrivateKey) -> Result<(ID, Ed25519PublicKey), Error> {
-        let tag = self.get_tag(key.as_bytes(), b"Ed25519Key")?;
+        let tag = self.get_tag(key.as_bytes(), ED25519_LABEL)?;
         let mut pk = [0u8; 32];
         ed25519::secret_to_public(&mut pk, key.as_bytes());
 
@@ -275,11 +280,11 @@ impl KeyStore {
     ) -> Result<(ID, MlKem768PublicKey), Error> {
         let mut rand = [0u8; libcrux_ml_kem::KEY_GENERATION_SEED_SIZE];
         rng.fill_bytes(&mut rand);
-        let key_pair = mlkem768::generate_key_pair(rand);
+        let (sk, pk) = mlkem768::generate_key_pair(rand).into_parts();
 
-        let id = self.get_tag(key_pair.private_key().as_slice(), b"MlKem768Key")?;
-        let key = SecretKey::MlKem768Key(Arc::new(key_pair.private_key().clone()));
-        let pk = MlKem768PublicKey::new(*key_pair.public_key().as_slice());
+        let id = self.get_tag(sk.as_slice(), MLKEM_768_LABEL)?;
+        let key = SecretKey::MlKem768Key(Arc::new(sk));
+        let pk = MlKem768PublicKey::new(pk.into());
         let entry = KeyStoreEntry { id, key };
         self.add_entry(entry);
 
@@ -295,7 +300,7 @@ impl KeyStore {
         let (pub_key, priv_key) =
             curve25519::X25519::generate_pair(&rand).map_err(|_| Error::KeyExchange)?;
 
-        let id = self.get_tag(&priv_key, b"X25519Key")?;
+        let id = self.get_tag(&priv_key, X25519_LABEL)?;
         let key = SecretKey::X25519Key(X25519SecretKey::new(priv_key));
         let pk = X25519PublicKey::new(pub_key);
         let entry = KeyStoreEntry { id, key };

@@ -3,19 +3,13 @@ use std::process::Command;
 use zerocopy::TryFromBytes;
 
 use crate::{
-    kex_messages::{
+    Error, ID, kex_messages::{
         MlKem768DecapsRequest, MlKem768DecapsResponse, MlKem768EncapsRequest,
         MlKem768EncapsResponse, MlKem768KeyGenResponse, X25519DeriveRequest, X25519DeriveResponse,
         X25519KeyGenResponse,
-    },
-    kx::{MlKem768Ciphertext, MlKem768PublicKey, X25519PublicKey},
-    messages::{ExportRequest, ExportResponse, IPCRequest, IPCResponse, MessageKind},
-    signatures::{
-        EcDsaP256PrivateKey, EcDsaP256PublicKey, EcDsaP256Signature, Ed25519PrivateKey,
-        Ed25519PublicKey, Ed25519Signature,
-    },
-    signing_messages::*,
-    Error, ID,
+    }, kx::{MlKem768Ciphertext, MlKem768PublicKey, X25519PublicKey}, messages::{ExportRequest, ExportResponse, IPCRequest, IPCResponse, MessageKind}, signatures::{
+        EcDsaP256PrivateKey, EcDsaP256PublicKey, EcDsaP256SHA256, EcDsaP256Signature, Ed25519, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature, SHA256
+    }, signing_messages::*
 };
 
 // Type aliases for libcrux ML-KEM types to avoid repetition
@@ -104,9 +98,10 @@ impl Agent {
 
     pub fn ecdsa_p256_add_key(
         &self,
-        key: EcDsaP256PrivateKey,
-    ) -> Result<(ID, EcDsaP256PublicKey), Error> {
-        let request = IPCSetupRequest::from(EcDsaP256SetupRequest::from(&key));
+        key: EcDsaP256PrivateKey<SHA256>,
+    ) -> Result<(ID, EcDsaP256PublicKey<SHA256>), Error> {
+        let setup_request = SetupRequest::<EcDsaP256SHA256>::from(&key);
+        let request = IPCSetupRequest::from(setup_request);
         self.tx.send(&request.into_bytes()).map_err(|_| Error::IO)?;
 
         let response = self.rx.recv().map_err(|_| Error::IO)?;
@@ -114,16 +109,17 @@ impl Agent {
 
         match response.get_header().get_type() {
             SetupMessageKind::EcDsaP256Key => {
-                let r = EcDsaP256SetupResponse::try_ref_from_bytes(response.get_payload())
+                let r = SetupResponse::<EcDsaP256PublicKey<SHA256>>::try_from(response.get_payload())
                     .map_err(|_| Error::MalformedResponse)?;
-                Ok((*r.get_id(), EcDsaP256PublicKey::from(r)))
+                Ok((*r.get_id(), EcDsaP256PublicKey::<SHA256>::from(r)))
             }
             _ => Err(Error::MalformedResponse),
         }
     }
 
     pub fn ed25519_add_key(&self, key: Ed25519PrivateKey) -> Result<(ID, Ed25519PublicKey), Error> {
-        let request = IPCSetupRequest::from(Ed25519SetupRequest::from(&key));
+        let setup_request = SetupRequest::<Ed25519>::from(&key);
+        let request = IPCSetupRequest::from(setup_request);
         self.tx.send(&request.into_bytes()).map_err(|_| Error::IO)?;
 
         let response = self.rx.recv().map_err(|_| Error::IO)?;
@@ -131,7 +127,7 @@ impl Agent {
 
         match response.get_header().get_type() {
             SetupMessageKind::Ed25519Key => {
-                let r = Ed25519SetupResponse::try_ref_from_bytes(response.get_payload())
+                let r = SetupResponse::<Ed25519PublicKey>::try_from(response.get_payload())
                     .map_err(|_| Error::MalformedResponse)?;
                 Ok((*r.get_id(), Ed25519PublicKey::from(r)))
             }
@@ -146,19 +142,19 @@ impl Agent {
     pub fn ecdsa_p256_sign_for_id(
         &self,
         id: ID,
-        message: Vec<u8>,
-    ) -> Result<EcDsaP256Signature, Error> {
-        let response = self.send_recv(IPCRequest::from(EcDsaP256SignRequest::new(id, message)))?;
+        message: &[u8],
+    ) -> Result<EcDsaP256Signature<SHA256>, Error> {
+        let response = self.send_recv(IPCRequest::from(SignRequest::<EcDsaP256SHA256>::new(id, message)))?;
         let payload = Self::expect_kind(&response, MessageKind::EcDsaP256Sign)?;
-        let r = EcDsaP256SignResponse::try_ref_from_bytes(payload)
+        let r = SignResponse::try_ref_from_bytes(payload)
             .map_err(|_| Error::MalformedResponse)?;
         Ok(EcDsaP256Signature::from(r))
     }
 
-    pub fn ed25519_sign_for_id(&self, id: ID, message: Vec<u8>) -> Result<Ed25519Signature, Error> {
-        let response = self.send_recv(IPCRequest::from(Ed25519SignRequest::new(id, message)))?;
+    pub fn ed25519_sign_for_id(&self, id: ID, message: &[u8]) -> Result<Ed25519Signature, Error> {
+        let response = self.send_recv(IPCRequest::from(SignRequest::<Ed25519>::new(id, message)))?;
         let payload = Self::expect_kind(&response, MessageKind::Ed25519Sign)?;
-        let r = Ed25519SignResponse::try_ref_from_bytes(payload)
+        let r = SignResponse::try_ref_from_bytes(payload)
             .map_err(|_| Error::MalformedResponse)?;
         Ok(Ed25519Signature::from(r))
     }

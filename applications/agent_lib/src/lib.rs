@@ -17,7 +17,8 @@ pub enum Error {
     Unsupported,
 }
 
-pub type ID = [u8; 32];
+pub(crate) const ID_SIZE: usize = 32;
+pub type ID = [u8; ID_SIZE];
 pub type SharedKey = [u8; 32];
 
 pub mod agent;
