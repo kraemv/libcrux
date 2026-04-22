@@ -50,6 +50,23 @@ impl Sig for EcDsaP256 {}
 ///     _ => println!("Unexpected Error"),
 /// }
 /// ```
+/// 
+/// Specific type example:
+/// ```
+/// use libcrux_primitive_api::signature::*;
+/// 
+/// let (sk, vk) = libcrux_ed25519::SigningKey::keygen().expect("Keygen failed");
+/// 
+/// let msg = b"Test message";
+/// let sig = sk.sign(msg).expect("Signing failed");
+/// 
+/// match vk.verify(msg, sig) {
+///     Ok(_) => println!("Valid signature"),
+///     Err(Error::InvalidSignature) => println!("Invalid signature"),
+///     Err(Error::Verify) => println!("Verification had an internal error"),
+///     _ => println!("Unexpected Error"),
+/// }
+/// ```
 /// Missing: signing key from file
 /// Missing: Verification for existing signature
 /// 
@@ -91,13 +108,7 @@ pub enum SignatureScheme {
     Ed25519,
 }
 
-// A signature that holds its actual value and additional information
-/*pub enum Signature {
-    EcDsaP256(signatures::EcDsaP256Signature),
-    Ed25519(signatures::Ed25519Signature),
-}*/
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct SigningKeyID<Scheme: Sig, Vk: VerificationKey> {
     id: ID,
     public_key: Vk,
@@ -207,30 +218,3 @@ impl From<libcrux_ed25519::Error> for Error {
         }
     }
 }
-/*
-#[derive(Clone, Debug)]
-pub enum VerificationKeyType {
-    EcDsaP256(signatures::EcDsaP256PublicKey),
-    Ed25519(signatures::Ed25519PublicKey),
-}
-
-impl VerificationKey for VerificationKeyType {
-    type VerificationError = Error;
-
-
-    fn verify(&self, payload: &[u8], signature: Signature) -> Result<(), Error> {
-        match self {
-            VerificationKeyType::EcDsaP256(key) => todo!(),//key.verify(payload, signature),
-            VerificationKeyType::Ed25519(key) => key.verify(payload, signature),
-        }
-    }
-}
-
-impl AsRef<[u8]> for VerificationKeyType {
-    fn as_ref(&self) -> &[u8] {
-        match self {
-            VerificationKeyType::EcDsaP256(key) => key.get_key().as_ref(),
-            VerificationKeyType::Ed25519(key) => key.as_bytes(),
-        }
-    }
-}*/
