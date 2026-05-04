@@ -1,10 +1,10 @@
 use core::fmt;
 
-use crate::provider::{get_agent, get_agent_and_idx, get_agent_by_idx};
-use crate::SharedKey;
+use crate::provider::{get_agent_and_idx, get_agent_by_idx};
+use crate::hkdf::SharedKey;
 use libcrux_ml_kem::mlkem768;
 
-/// Signature Errors
+/// KEM Errors
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     Internal(String),
@@ -92,7 +92,7 @@ impl DecapsKey for DecapsKeyID {
                 .mlkem_768_decaps_for_id(self.id, *ct)
                 .map_err(|_| Error::Decaps),
         }?;
-        agent.export_key(id).map_err(|_| Error::Decaps)
+        Ok(SharedKey::new(id, self.agent_idx))
     }
 
     fn scheme(&self) -> KemScheme {
@@ -102,17 +102,14 @@ impl DecapsKey for DecapsKeyID {
 
 impl EncapsKey for EncapsKeyType {
     fn encaps(&self) -> Result<(SharedKey, EncapsulatedKey), Error> {
-        let agent = get_agent().ok_or_else(|| Error::Internal("No agent available".into()))?;
+        let (agent, agent_idx) = get_agent_and_idx().ok_or_else(|| Error::Internal("No agent available".into()))?;
         let (id, ct) = match self {
             EncapsKeyType::MlKem768(key) => agent
                 .mlkem_768_encaps_for_id(key)
                 .map(|(shk, ct)| (shk, EncapsulatedKey::MlKem768(Box::new(ct))))
                 .map_err(|_| Error::Encaps),
         }?;
-        agent
-            .export_key(id)
-            .map(|shk| (shk, ct))
-            .map_err(|_| Error::Decaps)
+        Ok((SharedKey::new(id, agent_idx), ct))
     }
 
     fn scheme(&self) -> KemScheme {

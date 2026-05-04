@@ -1,8 +1,8 @@
 use crate::provider::{get_agent_and_idx, get_agent_by_idx};
-use crate::SharedKey;
+use crate::hkdf::SharedKey;
 use libcrux_agent::kx::{self, X25519PublicKey};
 
-/// Signature Errors
+/// NIKE Errors
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     Internal(String),
@@ -80,7 +80,7 @@ impl NIKESecretKey for NIKESecretKeyID {
                 .x25519_derive_for_key_id(self.id, ct)
                 .map_err(|_| Error::Derive),
         }?;
-        agent.export_key(id).map_err(|_| Error::Derive)
+        Ok(SharedKey::new(id, self.agent_idx))
     }
 
     fn scheme(&self) -> NIKEScheme {

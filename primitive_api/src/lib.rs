@@ -1,9 +1,10 @@
+pub mod hkdf;
 pub mod kem;
 pub mod nike;
 mod provider;
 pub mod signature;
 
-pub type SharedKey = [u8; 32];
+pub type RandomKey = Vec<u8>;
 /*
 Desired primitives / functionalities:
     All functions return a result
