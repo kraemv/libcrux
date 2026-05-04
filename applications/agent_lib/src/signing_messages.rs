@@ -1,15 +1,21 @@
 use std::marker::PhantomData;
 
 use crate::{
-    Error, ID, ID_SIZE, signatures::{
-        EcDsaP256PrivateKey, EcDsaP256PublicKey, EcDsaP256SHA256, EcDsaP256Signature, Ed25519, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature, SHA256
-    }
+    Error, ID, ID_SIZE,
+    signatures::{
+        EcDsaP256PrivateKey, EcDsaP256PublicKey, EcDsaP256SHA256, EcDsaP256Signature,
+        Ed25519, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature, SHA256,
+    },
 };
 
 use libcrux_ecdsa as ecdsa;
 use libcrux_ed25519 as ed25519;
 use libcrux_sha2::Algorithm;
 use zerocopy::*;
+
+// ---------------------------------------------------------------------------
+// Signing
+// ---------------------------------------------------------------------------
 
 #[derive(Clone, Copy, TryFromBytes, IntoBytes, Immutable, KnownLayout, Unaligned)]
 #[repr(u8)]
@@ -31,50 +37,6 @@ pub struct SignRequest<'a, Scheme> {
 pub struct SignResponse<Scheme> {
     signature: [u8; 64],
     _marker: PhantomData<Scheme>,
-}
-
-#[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
-#[repr(u8)]
-pub enum SetupMessageKind {
-    AgentInit,
-    EcDsaP256Key,
-    Ed25519Key,
-}
-
-#[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
-#[repr(u8)]
-pub enum InitResult {
-    Success,
-    Failure,
-}
-
-#[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
-#[repr(C)]
-pub struct SetupRequest<Scheme> {
-    sk: [u8; 32],
-    _marker: PhantomData<Scheme>,
-}
-
-pub struct SetupResponse<PublicKey> {
-    id: ID,
-    pk: PublicKey,
-}
-
-#[derive(TryFromBytes, IntoBytes, Immutable, KnownLayout)]
-#[repr(Rust, packed)]
-pub struct IPCSetupMessageHeader {
-    kind: SetupMessageKind,
-    response_len: u32,
-}
-
-pub struct IPCSetupRequest {
-    header: IPCSetupMessageHeader,
-    payload: Vec<u8>,
-}
-
-pub struct IPCSetupResponse {
-    header: IPCSetupMessageHeader,
-    payload: Vec<u8>,
 }
 
 impl From<Algorithm> for DigestAlgorithm {
@@ -99,7 +61,11 @@ impl From<DigestAlgorithm> for Algorithm {
     }
 }
 
-impl<Scheme> SignRequest<'_, Scheme> {
+impl<'a, Scheme> SignRequest<'a, Scheme> {
+    pub fn new(id: ID, message: &'a [u8]) -> Self {
+        Self { id, message, _marker: PhantomData }
+    }
+
     pub fn get_id(&self) -> &ID {
         &self.id
     }
@@ -109,19 +75,7 @@ impl<Scheme> SignRequest<'_, Scheme> {
     }
 }
 
-impl<'a> SignRequest<'a, EcDsaP256SHA256> {
-    pub fn new(id: ID, message: &'a [u8]) -> Self {
-        Self { id, message, _marker: PhantomData }
-    }
-}
-
-impl<'a> SignRequest<'a, Ed25519> {
-    pub fn new(id: ID, message: &'a [u8]) -> Self {
-        Self { id, message, _marker: PhantomData }
-    }
-}
-
-impl<'a, Scheme> TryFrom<&'a[u8]> for SignRequest<'a, Scheme> {
+impl<'a, Scheme> TryFrom<&'a [u8]> for SignRequest<'a, Scheme> {
     type Error = Error;
 
     fn try_from(request: &'a [u8]) -> Result<Self, Self::Error> {
@@ -148,149 +102,51 @@ impl From<EcDsaP256Signature<SHA256>> for SignResponse<EcDsaP256SHA256> {
         let (r, s) = signature_components.as_bytes();
         signature[..32].copy_from_slice(r);
         signature[32..].copy_from_slice(s);
-
-        Self {
-            signature,
-            _marker: PhantomData
-        }
+        Self { signature, _marker: PhantomData }
     }
 }
 
 impl From<&SignResponse<EcDsaP256SHA256>> for EcDsaP256Signature<SHA256> {
     fn from(sig: &SignResponse<EcDsaP256SHA256>) -> Self {
         let signature = ecdsa::p256::Signature::from_bytes(sig.signature);
-
         EcDsaP256Signature::<SHA256>::from(signature)
     }
 }
 
 impl From<Ed25519Signature> for SignResponse<Ed25519> {
     fn from(sig: Ed25519Signature) -> Self {
-        Self {
-            signature: sig.into_bytes(),
-            _marker: PhantomData
-        }
+        Self { signature: sig.into_bytes(), _marker: PhantomData }
     }
 }
 
 impl From<&SignResponse<Ed25519>> for Ed25519Signature {
     fn from(sig: &SignResponse<Ed25519>) -> Self {
         let signature = ed25519::Signature::from_bytes(sig.signature);
-
         Ed25519Signature::new(signature)
     }
 }
 
-impl IPCSetupRequest {
-    pub fn init_request() -> Self {
-        let header = IPCSetupMessageHeader::new(SetupMessageKind::AgentInit, 0);
-        Self {
-            header,
-            payload: Vec::new(),
-        }
-    }
+// ---------------------------------------------------------------------------
+// Key setup
+// ---------------------------------------------------------------------------
 
-    pub fn get_type(&self) -> &IPCSetupMessageHeader {
-        &self.header
-    }
-
-    pub fn get_payload(&self) -> &[u8] {
-        self.payload.as_ref()
-    }
-
-    pub fn into_bytes(self) -> Vec<u8> {
-        let mut buffer = self.header.as_bytes().to_vec();
-        buffer.extend(self.payload);
-
-        buffer
-    }
+#[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
+#[repr(u8)]
+pub enum InitResult {
+    Success,
+    Failure,
 }
 
-impl From<SetupRequest<EcDsaP256SHA256>> for IPCSetupRequest {
-    fn from(request: SetupRequest<EcDsaP256SHA256>) -> Self {
-        let payload = request.as_bytes().to_vec();
-        let response_len: u32 = payload.len().try_into().unwrap();
-        let header = IPCSetupMessageHeader {
-            kind: SetupMessageKind::EcDsaP256Key,
-            response_len,
-        };
-        Self { header, payload }
-    }
+#[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
+#[repr(C)]
+pub struct SetupRequest<Scheme> {
+    sk: [u8; 32],
+    _marker: PhantomData<Scheme>,
 }
 
-impl From<SetupRequest<Ed25519>> for IPCSetupRequest {
-    fn from(request: SetupRequest<Ed25519>) -> Self {
-        let payload = request.as_bytes().to_vec();
-        let response_len: u32 = payload.len().try_into().unwrap();
-        let header = IPCSetupMessageHeader {
-            kind: SetupMessageKind::Ed25519Key,
-            response_len,
-        };
-        Self { header, payload }
-    }
-}
-
-impl TryFrom<&[u8]> for IPCSetupRequest {
-    type Error = Error;
-
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        let (header, payload) = IPCSetupMessageHeader::try_read_from_prefix(value)
-            .map_err(|_| Error::MalformedRequest)?;
-        let payload_len = header.get_len() as usize;
-        let payload = payload
-            .split_at_checked(payload_len)
-            .ok_or(Error::MalformedRequest)?
-            .0
-            .to_vec();
-        Ok(Self { header, payload })
-    }
-}
-
-impl IPCSetupResponse {
-    pub fn into_bytes(self) -> Vec<u8> {
-        let mut buffer = self.header.as_bytes().to_vec();
-        buffer.extend(self.payload);
-
-        buffer
-    }
-
-    pub fn get_header(&self) -> &IPCSetupMessageHeader {
-        &self.header
-    }
-
-    pub fn get_payload(&self) -> &[u8] {
-        &self.payload
-    }
-}
-
-impl TryFrom<&[u8]> for IPCSetupResponse {
-    type Error = Error;
-
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        let (header, payload) = IPCSetupMessageHeader::try_read_from_prefix(value)
-            .map_err(|_| Error::MalformedRequest)?;
-        let payload_len = header.get_len() as usize;
-        let payload = payload
-            .split_at_checked(payload_len)
-            .ok_or(Error::MalformedRequest)?
-            .0
-            .to_vec();
-        Ok(Self { header, payload })
-    }
-}
-
-impl IPCSetupMessageHeader {
-    pub fn new(kind: SetupMessageKind, response_len: u32) -> Self {
-        Self { kind, response_len }
-    }
-
-    pub fn get_type(&self) -> &SetupMessageKind {
-        &self.kind
-    }
-
-    pub fn get_len(&self) -> u32 {
-        self.response_len
-    }
+pub struct SetupResponse<PublicKey> {
+    id: ID,
+    pk: PublicKey,
 }
 
 impl<PublicKey> SetupResponse<PublicKey> {
@@ -301,7 +157,7 @@ impl<PublicKey> SetupResponse<PublicKey> {
 
 impl SetupResponse<EcDsaP256PublicKey<SHA256>> {
     pub fn new(id: ID, pk: EcDsaP256PublicKey<SHA256>) -> Self {
-        Self { id, pk, }
+        Self { id, pk }
     }
 
     pub fn as_bytes(&self) -> Vec<u8> {
@@ -313,7 +169,7 @@ impl SetupResponse<EcDsaP256PublicKey<SHA256>> {
 
 impl SetupResponse<Ed25519PublicKey> {
     pub fn new(id: ID, pk: Ed25519PublicKey) -> Self {
-        Self { id, pk, }
+        Self { id, pk }
     }
 
     pub fn as_bytes(&self) -> Vec<u8> {
@@ -380,19 +236,13 @@ impl SetupRequest<Ed25519> {
 
 impl From<&EcDsaP256PrivateKey<SHA256>> for SetupRequest<EcDsaP256SHA256> {
     fn from(key: &EcDsaP256PrivateKey<SHA256>) -> Self {
-        Self {
-            sk: *key.as_bytes(),
-            _marker: PhantomData,
-        }
+        Self { sk: *key.as_bytes(), _marker: PhantomData }
     }
 }
 
 impl From<&Ed25519PrivateKey> for SetupRequest<Ed25519> {
     fn from(key: &Ed25519PrivateKey) -> Self {
-        Self {
-            sk: *key.as_bytes(),
-            _marker: PhantomData,
-        }
+        Self { sk: *key.as_bytes(), _marker: PhantomData }
     }
 }
 
@@ -402,41 +252,5 @@ impl From<Result<(), Error>> for InitResult {
             Ok(()) => InitResult::Success,
             Err(_) => InitResult::Failure,
         }
-    }
-}
-
-impl From<&SetupResponse<EcDsaP256PublicKey<SHA256>>> for IPCSetupResponse {
-    fn from(res: &SetupResponse<EcDsaP256PublicKey<SHA256>>) -> Self {
-        let payload = res.as_bytes().to_vec();
-        let response_len: u32 = payload.len().try_into().unwrap();
-        let header = IPCSetupMessageHeader {
-            kind: SetupMessageKind::EcDsaP256Key,
-            response_len,
-        };
-        Self { header, payload }
-    }
-}
-
-impl From<&SetupResponse<Ed25519PublicKey>> for IPCSetupResponse {
-    fn from(res: &SetupResponse<Ed25519PublicKey>) -> Self {
-        let payload = res.as_bytes().to_vec();
-        let response_len: u32 = payload.len().try_into().unwrap();
-        let header = IPCSetupMessageHeader {
-            kind: SetupMessageKind::Ed25519Key,
-            response_len,
-        };
-        Self { header, payload }
-    }
-}
-
-impl From<&InitResult> for IPCSetupResponse {
-    fn from(res: &InitResult) -> Self {
-        let payload = res.as_bytes().to_vec();
-        let response_len: u32 = payload.len().try_into().unwrap();
-        let header = IPCSetupMessageHeader {
-            kind: SetupMessageKind::AgentInit,
-            response_len,
-        };
-        Self { header, payload }
     }
 }

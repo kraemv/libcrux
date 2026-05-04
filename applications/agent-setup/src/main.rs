@@ -1,6 +1,6 @@
 mod request_handler;
 
-use libcrux_agent::{signing_messages::IPCSetupRequest, Error};
+use libcrux_agent::{messages::IPCSetupRequest, Error};
 
 use ipc_channel::{ipc::*, IpcError};
 
@@ -20,7 +20,7 @@ fn main() {
             Err(IpcError::Disconnected) => break,
             Err(_) => continue,
         };
-        let Ok(new_request) = IPCSetupRequest::try_from(new_request.as_ref()) else {
+        let Ok(new_request) = IPCSetupRequest::try_from(new_request.as_slice()) else {
             continue;
         };
         match request_handler::handle_request(&new_request) {

@@ -2,8 +2,6 @@ mod keys;
 mod request_handler;
 mod setup;
 
-// use keys::{add_ecdsa_p256_key, add_ed25519_key, sign_for_ecdsa_p256_id, sign_for_ed25519_id};
-
 use ipc_channel::ipc::*;
 use ipc_channel::IpcError;
 use libcrux_agent::messages::IPCRequest;

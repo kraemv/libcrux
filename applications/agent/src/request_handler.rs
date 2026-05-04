@@ -1,7 +1,8 @@
 use crate::keys::*;
 use crate::Error;
+use libcrux_agent::ID;
+use libcrux_agent::hkdf_messages::*;
 use libcrux_agent::kex_messages::*;
-use libcrux_agent::kx::MlKem768Ciphertext;
 use libcrux_agent::messages::ExportRequest;
 use libcrux_agent::messages::ExportResponse;
 use libcrux_agent::messages::{IPCRequest, IPCResponse, MessageKind};
@@ -11,7 +12,7 @@ use libcrux_agent::signing_messages::*;
 use zerocopy::*;
 
 pub(crate) fn handle_request(request: &IPCRequest) -> Result<IPCResponse, Error> {
-    match request.get_type().get_type() {
+    match request.get_header().get_type() {
         MessageKind::EcDsaP256Sign => {
             let request = SignRequest::<EcDsaP256SHA256>::try_from(request.get_payload())?;
             handle_ecdsa_p256_sign_request(&request)
@@ -46,8 +47,24 @@ pub(crate) fn handle_request(request: &IPCRequest) -> Result<IPCResponse, Error>
         MessageKind::Export => {
             let request = ExportRequest::try_ref_from_bytes(request.get_payload())
                 .map_err(|_| Error::MalformedRequest)?;
-            let response = ExportResponse::new(export_key(request.get_id())?);
+            let response = ExportResponse::new(export_key_material(request.get_id())?);
             Ok(IPCResponse::from(response))
+        }
+
+        MessageKind::HkdfExtractPublic => {
+            let request = HkdfExtractRequest::<&[u8]>::try_from(request.get_payload())?;
+            handle_hkdf_extract_public_salt(&request)
+        }
+
+        MessageKind::HkdfExtractSecret => {
+            let request = HkdfExtractRequest::<ID>::try_from(request.get_payload())
+                .map_err(|_| Error::MalformedRequest)?;
+            handle_hkdf_extract_secret_salt(&request)
+        }
+
+        MessageKind::HkdfExpand => {
+            let request = HkdfExpandRequest::try_from(request.get_payload())?;
+            handle_hkdf_expand(&request)
         }
     }
 }
@@ -92,11 +109,32 @@ pub(crate) fn handle_mlkem768_decaps(
 pub(crate) fn handle_mlkem768_encaps(
     request: &MlKem768EncapsRequest,
 ) -> Result<IPCResponse, Error> {
-    let pk = libcrux_ml_kem::mlkem768::MlKem768PublicKey::from(request.get_key().as_bytes());
-    mlkem_768_encaps_for_id(&pk).map(|(id, ct)| {
+    let pk = request.get_key();
+    mlkem_768_encaps_for_id(pk).map(|(id, ct)| {
         IPCResponse::from(MlKem768EncapsResponse::new(
             id,
-            MlKem768Ciphertext::new(*ct.as_slice()),
+            ct,
         ))
     })
+}
+
+pub(crate) fn handle_hkdf_extract_public_salt(
+    request: &HkdfExtractRequest<&[u8]>,
+) -> Result<IPCResponse, Error> {
+    hkdf_extract_public_salt(request.get_id(), request.get_salt())
+        .map(|id| IPCResponse::from(HkdfResponse::<HkdfExtractPublicSalt>::new(id)))
+}
+
+pub(crate) fn handle_hkdf_extract_secret_salt(
+    request: &HkdfExtractRequest<[u8; 32]>,
+) -> Result<IPCResponse, Error> {
+    hkdf_extract_secret_salt(request.get_id(), request.get_salt())
+        .map(|id| IPCResponse::from(HkdfResponse::<HkdfExtractSecretSalt>::new(id)))
+}
+
+pub(crate) fn handle_hkdf_expand(
+    request: &HkdfExpandRequest<'_>,
+) -> Result<IPCResponse, Error> {
+    hkdf_expand(*request.get_id(), request.get_info(), request.get_output_len())
+        .map(|id| IPCResponse::from(HkdfResponse::<HkdfExpand>::new(id)))
 }

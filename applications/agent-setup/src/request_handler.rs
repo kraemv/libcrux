@@ -8,6 +8,7 @@ use crate::Error;
 use libcrux_agent::key_store::*;
 use libcrux_agent::signatures::*;
 use libcrux_agent::signing_messages::*;
+use libcrux_agent::messages::*;
 
 use std::env;
 use std::fmt::Write as fmtWrite;
@@ -26,7 +27,7 @@ fn encode_hex(bytes: &[u8]) -> String {
 }
 
 pub(crate) fn handle_request(request: &IPCSetupRequest) -> Result<IPCSetupResponse, Error> {
-    match request.get_type().get_type() {
+    match request.get_header().get_type() {
         SetupMessageKind::AgentInit => Ok(IPCSetupResponse::from(&InitResult::from(init_agent()))),
         SetupMessageKind::EcDsaP256Key => {
             let key = SetupRequest::<EcDsaP256SHA256>::try_ref_from_bytes(request.get_payload())

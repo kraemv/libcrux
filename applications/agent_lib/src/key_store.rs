@@ -1,8 +1,10 @@
+use crate::hkdf::*;
 use crate::kx::*;
 use crate::signatures::*;
-use crate::{Error, SharedKey, ID};
+use crate::{Error, ID};
 
 use base64ct::{Base64, Encoding};
+use std::vec::Vec as std_vec;
 use libcrux_curve25519 as curve25519;
 use libcrux_curve25519::ecdh_api::EcdhOwned;
 use libcrux_ecdsa as ecdsa;
@@ -18,10 +20,13 @@ use std::path::Path;
 use std::string::String;
 use std::sync::{Arc, RwLock};
 
-const SHARED_KEY_LABEL: &[u8; 9] = b"SharedKey";
+
 const ECDSA_P256_LABEL: &[u8; 12] = b"EcDsaP256Key";
 const ED25519_LABEL: &[u8; 10] = b"Ed25519Key";
 const MLKEM_768_LABEL: &[u8; 11] = b"MlKem768Key";
+const RANDOM_BYTES_LABEL: &[u8; 11] = b"RandomBytes";
+const PRK_LABEL: &[u8; 15] = b"PseudorandomKey";
+const SHARED_KEY_LABEL: &[u8; 9] = b"SharedKey";
 const X25519_LABEL: &[u8; 9] = b"X25519Key";
 
 fn encode_hex(bytes: &[u8]) -> String {
@@ -32,13 +37,19 @@ fn encode_hex(bytes: &[u8]) -> String {
     s
 }
 
-pub enum SecretKey {
+pub(crate) enum SecretKey {
     EcDsaP256Key(EcDsaP256PrivateKey<SHA256>),
     Ed25519Key(Ed25519PrivateKey),
-    // SessionTicket(SessionTicket),
     MlKem768Key(Arc<mlkem768::MlKem768PrivateKey>),
     X25519Key(X25519SecretKey),
     SharedSecret(SharedKey),
+    HkdfSalt(RandomBytes),
+    PseudorandomKey(PseudorandomKey),
+    RandomBytes(RandomBytes),
+}
+
+enum Transition {
+    RandomToSalt,
 }
 
 pub enum PublicKey {
@@ -51,6 +62,15 @@ pub struct KeyStoreEntry {
     key: SecretKey,
 }
 
+impl SecretKey {
+    pub(crate) fn into_hkdf_salt(self) -> Option<Self> {
+        match self {
+            SecretKey::RandomBytes(bytes) => Some(SecretKey::HkdfSalt(bytes)),
+            _ => None,
+        }
+    }
+}
+
 impl KeyStoreEntry {
     fn new(id: ID, key: SecretKey) -> Self {
         Self { id, key }
@@ -58,6 +78,11 @@ impl KeyStoreEntry {
 
     fn get_key(&self) -> &SecretKey {
         &self.key
+    }
+
+    fn random_to_salt(mut self) -> Option<Self> {
+        self.key = self.key.into_hkdf_salt()?;
+        Some(self)
     }
 }
 
@@ -151,6 +176,24 @@ impl KeyStore {
         self.entries.write().unwrap().insert(entry.id, entry);
     }
 
+    fn remove_entry(&self, id: ID) -> Option<()>{
+        self.entries.write().unwrap().remove(&id).map(|_| ())
+    }
+
+    fn transition_entry(&self, id: ID, transition: Transition) -> Option<()>{
+        let mut entries = self.entries.write().unwrap();
+
+        match transition {
+            Transition::RandomToSalt => {
+                let entry = entries.remove(&id)?;
+                let updated = entry.random_to_salt()?;
+                entries.insert(id, updated);
+            }
+        };
+
+        Some(())
+    }
+
     fn get_tag(&self, bytes: &[u8], customization: &[u8]) -> Result<ID, Error> {
         let mut tag = [0u8; 32];
         let tag = kmac::kmac_128(&mut tag, &self.root_key, bytes, customization)
@@ -174,7 +217,7 @@ impl KeyStore {
                 _ => Err(Error::Derive),
             }?
         };
-        let tag = self.get_tag(&shared_key, SHARED_KEY_LABEL)?;
+        let tag = self.get_tag(shared_key.as_ref(), SHARED_KEY_LABEL)?;
         let entry = KeyStoreEntry::new(tag, SecretKey::SharedSecret(shared_key));
         self.add_entry(entry);
 
@@ -189,12 +232,12 @@ impl KeyStore {
         let shared_key = {
             let entries = self.entries.read().map_err(|_| Error::Derive)?;
             match entries.get(&id).ok_or(Error::UnknownID)?.get_key() {
-                SecretKey::MlKem768Key(key) => Ok(mlkem768::decapsulate(key, &ct)),
+                SecretKey::MlKem768Key(key) => Ok(SharedKey::new(mlkem768::decapsulate(key, &ct))),
                 _ => Err(Error::Derive),
             }?
         };
 
-        let tag = self.get_tag(shared_key.as_slice(), SHARED_KEY_LABEL)?;
+        let tag = self.get_tag(shared_key.as_ref(), SHARED_KEY_LABEL)?;
         let entry = KeyStoreEntry::new(tag, SecretKey::SharedSecret(shared_key));
         self.add_entry(entry);
 
@@ -203,24 +246,21 @@ impl KeyStore {
 
     pub fn mlkem_768_encaps_for_id(
         &self,
-        pk: &mlkem768::MlKem768PublicKey,
+        pk: &MlKem768PublicKey,
         rng: &mut impl CryptoRng,
-    ) -> Result<(ID, mlkem768::MlKem768Ciphertext), Error> {
-        let mut rand = [0u8; libcrux_ml_kem::SHARED_SECRET_SIZE];
-        rng.fill_bytes(&mut rand);
-        let (ct, shared_key) = mlkem768::encapsulate(pk, rand);
-
-        let tag = self.get_tag(shared_key.as_slice(), SHARED_KEY_LABEL)?;
+    ) -> Result<(ID, MlKem768Ciphertext), Error> {
+        let (ct, shared_key) = pk.encaps(rng);
+        let tag = self.get_tag(shared_key.as_ref(), SHARED_KEY_LABEL)?;
         let entry = KeyStoreEntry::new(tag, SecretKey::SharedSecret(shared_key));
         self.add_entry(entry);
 
         Ok((tag, ct))
     }
 
-    pub fn export_shared_secret(&self, id: ID) -> Result<SharedKey, Error> {
+    pub fn export_key_material(&self, id: ID) -> Result<std_vec<u8>, Error> {
         let entries = self.entries.read().map_err(|_| Error::Derive)?;
         match entries.get(&id).ok_or(Error::UnknownID)?.get_key() {
-            SecretKey::SharedSecret(key) => Ok(*key),
+            SecretKey::RandomBytes(key) => Ok(key.into_vec()),
             _ => Err(Error::Derive),
         }
     }
@@ -307,5 +347,86 @@ impl KeyStore {
         self.add_entry(entry);
 
         Ok((id, pk))
+    }
+
+    // ------------------------------------------------
+    // HKDF
+    // ------------------------------------------------
+    pub fn sha256_hkdf_extract_public_salt(&self, id: Option<ID>, salt: Option<&[u8]>) -> Result<ID, Error> {
+        let pseudorandom_key = {
+            let entries = self.entries.read().map_err(|_| Error::HKDF)?;
+            let default_key = SecretKey::SharedSecret(SharedKey::new([0u8; 32]));
+
+            let secret_key = match id {
+                Some(id) => entries.get(&id).ok_or(Error::UnknownID)?.get_key(),
+                None => &default_key,
+            };
+
+            match secret_key {
+                SecretKey::SharedSecret(key) => key.sha2_256_hkdf_extract(salt),
+                _ => Err(Error::HKDF),
+            }?
+        };
+
+        id.map(|id| self.remove_entry(id));
+
+        let id = self.get_tag(pseudorandom_key.as_ref(), PRK_LABEL)?;
+        let key = SecretKey::PseudorandomKey(pseudorandom_key);
+        let entry = KeyStoreEntry { id, key };
+        self.add_entry(entry);
+
+        Ok(id)
+    }
+
+    pub fn sha256_hkdf_extract_secret_salt(&self, id: Option<ID>, salt: Option<ID>) -> Result<ID, Error> {
+        let pseudorandom_key = {
+            let entries = self.entries.read().map_err(|_| Error::HKDF)?;
+            let default_key = SecretKey::SharedSecret(SharedKey::new([0u8; 32]));
+            let default_salt = SecretKey::HkdfSalt(RandomBytes::try_from([0u8; SHA2_256_LEN].as_ref())?);
+
+            let secret_key = match id {
+                Some(id) => entries.get(&id).ok_or(Error::UnknownID)?.get_key(),
+                None => &default_key,
+            };
+
+            let salt = match salt {
+                Some(salt) => entries.get(&salt).ok_or(Error::UnknownID)?.get_key(),
+                None => &default_salt,
+            };
+
+            match (secret_key, salt) {
+                (SecretKey::SharedSecret(key), SecretKey::HkdfSalt(salt)) => key.sha2_256_hkdf_extract(Some(salt.as_ref())),
+                (SecretKey::SharedSecret(key), SecretKey::RandomBytes(salt)) => key.sha2_256_hkdf_extract(Some(salt.as_ref())),
+                _ => Err(Error::HKDF),
+            }?
+        };
+        // TODO: Do everything in one write lock
+        id.map(|id| self.remove_entry(id));
+        salt.map(|id| self.transition_entry(id, Transition::RandomToSalt));
+
+
+        let id = self.get_tag(pseudorandom_key.as_ref(), PRK_LABEL)?;
+        let key = SecretKey::PseudorandomKey(pseudorandom_key);
+        let entry = KeyStoreEntry { id, key };
+        self.add_entry(entry);
+
+        Ok(id)
+    }
+
+    pub fn sha256_hkdf_expand(&self, id: ID, info: &[u8], output_len: usize) -> Result<ID, Error> {
+        let out_key_material = {
+            let entries = self.entries.read().map_err(|_| Error::Derive)?;
+            match entries.get(&id).ok_or(Error::UnknownID)?.get_key() {
+                SecretKey::PseudorandomKey(key) => key.sha2_256_hkdf_expand(info, output_len),
+                _ => Err(Error::Derive),
+            }?
+        };
+
+        let id = self.get_tag(out_key_material.as_ref(), RANDOM_BYTES_LABEL)?;
+        let key = SecretKey::RandomBytes(out_key_material);
+        let entry = KeyStoreEntry { id, key };
+        self.add_entry(entry);
+
+        Ok(id)
     }
 }

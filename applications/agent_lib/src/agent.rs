@@ -3,13 +3,15 @@ use std::process::Command;
 use zerocopy::TryFromBytes;
 
 use crate::{
-    Error, ID, kex_messages::{
-        MlKem768DecapsRequest, MlKem768DecapsResponse, MlKem768EncapsRequest,
-        MlKem768EncapsResponse, MlKem768KeyGenResponse, X25519DeriveRequest, X25519DeriveResponse,
-        X25519KeyGenResponse,
-    }, kx::{MlKem768Ciphertext, MlKem768PublicKey, X25519PublicKey}, messages::{ExportRequest, ExportResponse, IPCRequest, IPCResponse, MessageKind}, signatures::{
+    Error, ID, kex_messages::*,
+    kx::{MlKem768Ciphertext, MlKem768PublicKey, X25519PublicKey}, messages::{
+        ExportRequest, ExportResponse, IPCRequest, IPCResponse, IPCSetupRequest, IPCSetupResponse,
+        MessageKind, SetupMessageKind,
+    }, signatures::{
         EcDsaP256PrivateKey, EcDsaP256PublicKey, EcDsaP256SHA256, EcDsaP256Signature, Ed25519, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature, SHA256
-    }, signing_messages::*
+    },
+    signing_messages::*,
+    hkdf_messages::*,
 };
 
 // Type aliases for libcrux ML-KEM types to avoid repetition
@@ -67,7 +69,7 @@ impl Agent {
     }
 
     fn expect_kind(response: &IPCResponse, expected: MessageKind) -> Result<&[u8], Error> {
-        if *response.get_header().get_type() == expected {
+        if response.get_header().get_type() == expected {
             Ok(response.get_payload())
         } else {
             Err(Error::MalformedResponse)
@@ -219,11 +221,35 @@ impl Agent {
         ))
     }
 
-    pub fn export_key(&self, id: ID) -> Result<[u8; 32], Error> {
+    pub fn hkdf_extract_public_salt(&self, id: Option<ID>, salt: Option<&[u8]>) -> Result<ID, Error> {
+        let response = self.send_recv(IPCRequest::from(HkdfExtractRequest::new(id, salt)))?;
+        let payload = Self::expect_kind(&response, MessageKind::HkdfExtractPublic)?;
+        let r = HkdfResponse::<HkdfExtractPublicSalt>::try_ref_from_bytes(payload)
+            .map_err(|_| Error::MalformedResponse)?;
+        Ok(*r.get_id())
+    }
+
+    pub fn hkdf_extract_secret_salt(&self, id: Option<ID>, salt: Option<ID>) -> Result<ID, Error> {
+        let response = self.send_recv(IPCRequest::from(HkdfExtractRequest::new(id, salt)))?;
+        let payload = Self::expect_kind(&response, MessageKind::HkdfExtractSecret)?;
+        let r = HkdfResponse::<HkdfExtractSecretSalt>::try_ref_from_bytes(payload)
+            .map_err(|_| Error::MalformedResponse)?;
+        Ok(*r.get_id())
+    }
+
+    pub fn hkdf_expand(&self, id: ID, output_len: usize, info: &[u8]) -> Result<ID, Error> {
+        let response = self.send_recv(IPCRequest::from(HkdfExpandRequest::new(id, output_len, info)))?;
+        let payload = Self::expect_kind(&response, MessageKind::HkdfExpand)?;
+        let r = HkdfResponse::<HkdfExpand>::try_ref_from_bytes(payload)
+            .map_err(|_| Error::MalformedResponse)?;
+        Ok(*r.get_id())
+    }
+
+    pub fn export_key(&self, id: ID) -> Result<Vec<u8>, Error> {
         let response = self.send_recv(IPCRequest::from(ExportRequest::new(id)))?;
         let payload = Self::expect_kind(&response, MessageKind::Export)?;
         let r =
-            ExportResponse::try_ref_from_bytes(payload).map_err(|_| Error::MalformedResponse)?;
-        Ok(*r.get_shk())
+            ExportResponse::new(payload.to_vec());
+        Ok(r.get_shk().to_vec())
     }
 }
