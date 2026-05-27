@@ -23,6 +23,8 @@ pub type ID = [u8; ID_SIZE];
 
 pub mod agent;
 pub mod ipc;
+pub mod hmac;
+pub mod hmac_messages;
 pub mod kex_messages;
 pub mod key_store;
 pub mod kx;
