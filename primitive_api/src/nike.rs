@@ -1,5 +1,6 @@
 use crate::provider::{get_agent_and_idx, get_agent_by_idx};
 use crate::hkdf::SharedKey;
+use libcrux_agent::ID;
 use libcrux_agent::kx::{self, X25519PublicKey};
 
 /// NIKE Errors
@@ -43,7 +44,7 @@ pub enum NIKEPublicKeyType {
 
 #[derive(Clone, Debug)]
 pub struct NIKESecretKeyID {
-    id: [u8; 32],
+    id: ID,
     scheme: NIKEScheme,
     agent_idx: usize,
 }

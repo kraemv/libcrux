@@ -2,6 +2,7 @@ use core::fmt;
 
 use crate::provider::{get_agent_and_idx, get_agent_by_idx};
 use crate::hkdf::SharedKey;
+use libcrux_agent::ID;
 use libcrux_ml_kem::mlkem768;
 
 /// KEM Errors
@@ -55,7 +56,7 @@ pub enum EncapsulatedKey {
 
 #[derive(Clone, Debug)]
 pub struct DecapsKeyID {
-    id: [u8; 32],
+    id: ID,
     scheme: KemScheme,
     agent_idx: usize,
 }
@@ -89,7 +90,7 @@ impl DecapsKey for DecapsKeyID {
             .ok_or_else(|| Error::Internal("No agent available".into()))?;
         let id = match (ct, self.scheme) {
             (EncapsulatedKey::MlKem768(ct), KemScheme::MlKem768) => agent
-                .mlkem_768_decaps_for_id(self.id, *ct)
+                .mlkem_768_decaps_for_id(self.id.clone(), *ct)
                 .map_err(|_| Error::Decaps),
         }?;
         Ok(SharedKey::new(id, self.agent_idx))

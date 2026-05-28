@@ -2,6 +2,7 @@ use crate::keys::*;
 use crate::Error;
 use libcrux_agent::ID;
 use libcrux_agent::hkdf_messages::*;
+use libcrux_agent::hmac::Sha2_256HMAC;
 use libcrux_agent::kex_messages::*;
 use libcrux_agent::messages::ExportRequest;
 use libcrux_agent::messages::ExportResponse;
@@ -9,6 +10,7 @@ use libcrux_agent::messages::{IPCRequest, IPCResponse, MessageKind};
 use libcrux_agent::signatures::EcDsaP256SHA256;
 use libcrux_agent::signatures::Ed25519;
 use libcrux_agent::signing_messages::*;
+use libcrux_agent::hmac_messages::*;
 use zerocopy::*;
 
 pub(crate) fn handle_request(request: &IPCRequest) -> Result<IPCResponse, Error> {
@@ -66,20 +68,25 @@ pub(crate) fn handle_request(request: &IPCRequest) -> Result<IPCResponse, Error>
             let request = HkdfExpandRequest::try_from(request.get_payload())?;
             handle_hkdf_expand(&request)
         }
+
+        MessageKind::HmacSha2_256Authenticate => {
+            let request = HmacRequest::<Sha2_256HMAC>::try_from(request.get_payload())?;
+            handle_hmac_sha2_256_authenticate(&request)
+        }
     }
 }
 
 pub(crate) fn handle_ecdsa_p256_sign_request(
     request: &SignRequest<EcDsaP256SHA256>,
 ) -> Result<IPCResponse, Error> {
-    ecdsa_p256_sign_for_id(*request.get_id(), request.get_payload())
+    ecdsa_p256_sign_for_id(request.get_id(), request.get_payload())
         .map(|sig| IPCResponse::from(SignResponse::<EcDsaP256SHA256>::from(sig)))
 }
 
 pub(crate) fn handle_ed25519_sign_request(
     request: &SignRequest<Ed25519>,
 ) -> Result<IPCResponse, Error> {
-    ed25519_sign_for_id(*request.get_id(), request.get_payload())
+    ed25519_sign_for_id(request.get_id(), request.get_payload())
         .map(|sig| IPCResponse::from(SignResponse::<Ed25519>::from(sig)))
 }
 
@@ -93,7 +100,7 @@ pub(crate) fn handle_mlkem768_key_gen() -> Result<IPCResponse, Error> {
 }
 
 pub(crate) fn handle_x25519_derive(request: &X25519DeriveRequest) -> Result<IPCResponse, Error> {
-    x25519_derive_for_key_id(*request.get_id(), request.get_key())
+    x25519_derive_for_key_id(request.get_id(), request.get_key())
         .map(|shk| IPCResponse::from(X25519DeriveResponse::new(shk)))
 }
 
@@ -102,7 +109,7 @@ pub(crate) fn handle_mlkem768_decaps(
 ) -> Result<IPCResponse, Error> {
     let ct =
         libcrux_ml_kem::mlkem768::MlKem768Ciphertext::from(request.get_ciphertext().as_bytes());
-    mlkem_768_decaps_for_id(*request.get_id(), ct)
+    mlkem_768_decaps_for_id(request.get_id(), ct)
         .map(|shk| IPCResponse::from(MlKem768DecapsResponse::new(shk)))
 }
 
@@ -126,15 +133,24 @@ pub(crate) fn handle_hkdf_extract_public_salt(
 }
 
 pub(crate) fn handle_hkdf_extract_secret_salt(
-    request: &HkdfExtractRequest<[u8; 32]>,
+    request: &HkdfExtractRequest<ID>,
 ) -> Result<IPCResponse, Error> {
-    hkdf_extract_secret_salt(request.get_id(), request.get_salt())
-        .map(|id| IPCResponse::from(HkdfResponse::<HkdfExtractSecretSalt>::new(id)))
+    match request.get_salt() {
+        Some(salt_id) => hkdf_extract_secret_salt(request.get_id(), salt_id)
+            .map(|id| IPCResponse::from(HkdfResponse::<HkdfExtractSecretSalt>::new(id))),
+        None => hkdf_extract_public_salt(request.get_id(), None)
+            .map(|id| IPCResponse::from(HkdfResponse::<HkdfExtractSecretSalt>::new(id)))
+    }
 }
 
 pub(crate) fn handle_hkdf_expand(
     request: &HkdfExpandRequest<'_>,
 ) -> Result<IPCResponse, Error> {
-    hkdf_expand(*request.get_id(), request.get_info(), request.get_output_len())
+    hkdf_expand(request.get_id(), request.get_info(), request.get_output_len())
         .map(|id| IPCResponse::from(HkdfResponse::<HkdfExpand>::new(id)))
+}
+
+pub(crate) fn handle_hmac_sha2_256_authenticate(request: &HmacRequest<Sha2_256HMAC>) -> Result<IPCResponse, Error> {
+    hmac_sha2_256_authenticate(request.get_id(), request.get_payload())
+        .map(|tag| IPCResponse::from(HmacResponse::from(tag)))
 }

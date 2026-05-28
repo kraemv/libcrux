@@ -1,4 +1,6 @@
+pub mod hash;
 pub mod hkdf;
+pub mod hmac;
 pub mod kem;
 pub mod nike;
 mod provider;

@@ -34,7 +34,7 @@ pub struct HkdfResponse<Event> {
     event: PhantomData<Event>,
 }
 
-impl<Salt> HkdfExtractRequest<Salt> where Salt: Clone{
+impl<Salt> HkdfExtractRequest<Salt> {
     pub fn new(id: Option<ID>, salt: Option<Salt>) -> Self 
     {
         let header = match id {
@@ -44,16 +44,24 @@ impl<Salt> HkdfExtractRequest<Salt> where Salt: Clone{
         Self { header, id, salt }
     }
 
-    pub fn get_id(&self) -> Option<ID> {
-        self.id
+    pub fn get_id(&self) -> Option<&ID> {
+        self.id.as_ref()
     }
 
     pub fn get_header(&self) -> &HkdfExtractHeader {
         &self.header
     }
+}
 
-    pub fn get_salt(&self) -> Option<Salt> {
-        self.salt.clone()
+impl HkdfExtractRequest<ID> {
+    pub fn get_salt(&self) -> Option<&ID> {
+        self.salt.as_ref()
+    }
+}
+
+impl HkdfExtractRequest<&[u8]> {
+    pub fn get_salt(&self) -> Option<&[u8]> {
+        self.salt
     }
 }
 
@@ -123,7 +131,7 @@ impl<'a> TryFrom<&'a [u8]> for HkdfExpandRequest<'a> {
 impl From<HkdfExpandRequest<'_>> for Vec<u8> {
     fn from(request: HkdfExpandRequest<'_>) -> Self {
         let mut result = Vec::new();
-        result.extend_from_slice(&request.id);
+        result.extend_from_slice(request.id.as_ref());
         result.extend_from_slice(&(request.output_len as u32).to_le_bytes());
         result.extend_from_slice(request.info);
         result

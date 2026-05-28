@@ -1,4 +1,5 @@
 use zerocopy::*;
+use heapless::Vec;
 
 #[derive(Clone, Debug, IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
 #[repr(u8)]
@@ -9,6 +10,7 @@ pub enum Error {
     IO,
     HKDF,
     KeyExchange,
+    MAC,
     MalformedRequest,
     MalformedResponse,
     NoAgent,
@@ -19,7 +21,31 @@ pub enum Error {
 }
 
 pub(crate) const ID_SIZE: usize = 32;
-pub type ID = [u8; ID_SIZE];
+pub(crate) type InnerRndBytes = Vec<u8, 64>;
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
+#[repr(C)]
+pub struct ID([u8; ID_SIZE]); 
+
+impl TryFrom<&[u8]> for ID {
+    type Error = Error;
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        let id: [u8; ID_SIZE] = value.try_into().map_err(|_| Error::MalformedRequest)?;
+        Ok(Self(id))
+    }
+}
+
+impl From<[u8; 32]> for ID {
+    fn from(value: [u8; 32]) -> Self {
+        Self(value)
+    }
+}
+
+impl AsRef<[u8; 32]> for ID {
+    fn as_ref(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
 
 pub mod agent;
 pub mod ipc;

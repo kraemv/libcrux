@@ -3,15 +3,12 @@ use std::process::Command;
 use zerocopy::TryFromBytes;
 
 use crate::{
-    Error, ID, kex_messages::*,
-    kx::{MlKem768Ciphertext, MlKem768PublicKey, X25519PublicKey}, messages::{
+    Error, ID, hkdf_messages::*, hmac::{HmacSha256Mac, Sha2_256HMAC}, hmac_messages::{HmacRequest, HmacResponse}, kex_messages::*, kx::{MlKem768Ciphertext, MlKem768PublicKey, X25519PublicKey}, messages::{
         ExportRequest, ExportResponse, IPCRequest, IPCResponse, IPCSetupRequest, IPCSetupResponse,
         MessageKind, SetupMessageKind,
     }, signatures::{
         EcDsaP256PrivateKey, EcDsaP256PublicKey, EcDsaP256SHA256, EcDsaP256Signature, Ed25519, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature, SHA256
-    },
-    signing_messages::*,
-    hkdf_messages::*,
+    }, signing_messages::*
 };
 
 // Type aliases for libcrux ML-KEM types to avoid repetition
@@ -113,7 +110,7 @@ impl Agent {
             SetupMessageKind::EcDsaP256Key => {
                 let r = SetupResponse::<EcDsaP256PublicKey<SHA256>>::try_from(response.get_payload())
                     .map_err(|_| Error::MalformedResponse)?;
-                Ok((*r.get_id(), EcDsaP256PublicKey::<SHA256>::from(r)))
+                Ok((r.get_id().clone(), EcDsaP256PublicKey::<SHA256>::from(r)))
             }
             _ => Err(Error::MalformedResponse),
         }
@@ -131,7 +128,7 @@ impl Agent {
             SetupMessageKind::Ed25519Key => {
                 let r = SetupResponse::<Ed25519PublicKey>::try_from(response.get_payload())
                     .map_err(|_| Error::MalformedResponse)?;
-                Ok((*r.get_id(), Ed25519PublicKey::from(r)))
+                Ok((r.get_id().clone(), Ed25519PublicKey::from(r)))
             }
             _ => Err(Error::MalformedResponse),
         }
@@ -170,7 +167,7 @@ impl Agent {
         let payload = Self::expect_kind(&response, MessageKind::X25519KeyGen)?;
         let r = X25519KeyGenResponse::try_ref_from_bytes(payload)
             .map_err(|_| Error::MalformedResponse)?;
-        Ok((*r.get_id(), X25519PublicKey::from(r)))
+        Ok((r.get_id().clone(), X25519PublicKey::from(r)))
     }
 
     pub fn x25519_derive_for_key_id(&self, id: ID, pk: X25519PublicKey) -> Result<ID, Error> {
@@ -178,7 +175,7 @@ impl Agent {
         let payload = Self::expect_kind(&response, MessageKind::X25519Derive)?;
         let r = X25519DeriveResponse::try_ref_from_bytes(payload)
             .map_err(|_| Error::MalformedResponse)?;
-        Ok(*r.get_id())
+        Ok(r.get_id().clone())
     }
 
     // -------------------------------------------------------------------------
@@ -190,7 +187,7 @@ impl Agent {
         let payload = Self::expect_kind(&response, MessageKind::MlKem768KeyGen)?;
         let r = MlKem768KeyGenResponse::try_ref_from_bytes(payload)
             .map_err(|_| Error::MalformedResponse)?;
-        Ok((*r.get_id(), LibcruxMlKem768PublicKey::from(r)))
+        Ok((r.get_id().clone(), LibcruxMlKem768PublicKey::from(r)))
     }
 
     pub fn mlkem_768_decaps_for_id(
@@ -203,7 +200,7 @@ impl Agent {
         let payload = Self::expect_kind(&response, MessageKind::MlKem768Decaps)?;
         let r = MlKem768DecapsResponse::try_ref_from_bytes(payload)
             .map_err(|_| Error::MalformedResponse)?;
-        Ok(*r.get_id())
+        Ok(r.get_id().clone())
     }
 
     pub fn mlkem_768_encaps_for_id(
@@ -216,7 +213,7 @@ impl Agent {
         let r = MlKem768EncapsResponse::try_ref_from_bytes(payload)
             .map_err(|_| Error::MalformedResponse)?;
         Ok((
-            *r.get_id(),
+            r.get_id().clone(),
             LibcruxMlKem768Ciphertext::from(r.get_ct().as_bytes()),
         ))
     }
@@ -226,7 +223,7 @@ impl Agent {
         let payload = Self::expect_kind(&response, MessageKind::HkdfExtractPublic)?;
         let r = HkdfResponse::<HkdfExtractPublicSalt>::try_ref_from_bytes(payload)
             .map_err(|_| Error::MalformedResponse)?;
-        Ok(*r.get_id())
+        Ok(r.get_id().clone())
     }
 
     pub fn hkdf_extract_secret_salt(&self, id: Option<ID>, salt: Option<ID>) -> Result<ID, Error> {
@@ -234,7 +231,7 @@ impl Agent {
         let payload = Self::expect_kind(&response, MessageKind::HkdfExtractSecret)?;
         let r = HkdfResponse::<HkdfExtractSecretSalt>::try_ref_from_bytes(payload)
             .map_err(|_| Error::MalformedResponse)?;
-        Ok(*r.get_id())
+        Ok(r.get_id().clone())
     }
 
     pub fn hkdf_expand(&self, id: ID, output_len: usize, info: &[u8]) -> Result<ID, Error> {
@@ -242,7 +239,15 @@ impl Agent {
         let payload = Self::expect_kind(&response, MessageKind::HkdfExpand)?;
         let r = HkdfResponse::<HkdfExpand>::try_ref_from_bytes(payload)
             .map_err(|_| Error::MalformedResponse)?;
-        Ok(*r.get_id())
+        Ok(r.get_id().clone())
+    }
+
+    pub fn hmac_sha2_256_authenticate(&self, id: ID, message: &[u8]) -> Result<HmacSha256Mac, Error> {
+        let response = self.send_recv(IPCRequest::from(HmacRequest::<Sha2_256HMAC>::new(id, message)))?;
+        let payload = Self::expect_kind(&response, MessageKind::HmacSha2_256Authenticate)?;
+        let r = HmacResponse::<HmacSha256Mac>::try_ref_from_bytes(payload)
+            .map_err(|_| Error::MalformedResponse)?;
+        Ok(HmacSha256Mac::from(r))
     }
 
     pub fn export_key(&self, id: ID) -> Result<Vec<u8>, Error> {

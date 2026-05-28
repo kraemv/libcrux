@@ -104,10 +104,10 @@ impl SigningKey for SigningKeyID {
         let agent = get_agent().ok_or_else(|| Error::InternalError("No agent available".into()))?;
         match self.scheme {
             SignatureScheme::EcDsaP256(DigestAlgorithm::Sha256) => agent
-                .ecdsa_p256_sign_for_id(self.id, payload)
+                .ecdsa_p256_sign_for_id(self.id.clone(), payload)
                 .map(Signature::EcDsaP256),
             SignatureScheme::Ed25519 => agent
-                .ed25519_sign_for_id(self.id, payload)
+                .ed25519_sign_for_id(self.id.clone(), payload)
                 .map(Signature::Ed25519),
             _ => return Err(Error::InvalidKey),
         }

@@ -11,20 +11,11 @@ use libcrux_agent::signing_messages::*;
 use libcrux_agent::messages::*;
 
 use std::env;
-use std::fmt::Write as fmtWrite;
 use std::io::Write;
 use std::{fs, path::PathBuf};
 
 static KEY_STORE: LazyLock<KeyStore> =
     LazyLock::new(|| KeyStore::from_disk().expect("Failed to load agent"));
-
-fn encode_hex(bytes: &[u8]) -> String {
-    let mut s = String::with_capacity(bytes.len() * 2);
-    for &b in bytes {
-        write!(&mut s, "{:02x}", b).unwrap();
-    }
-    s
-}
 
 pub(crate) fn handle_request(request: &IPCSetupRequest) -> Result<IPCSetupResponse, Error> {
     match request.get_header().get_type() {
@@ -42,11 +33,11 @@ pub(crate) fn handle_request(request: &IPCSetupRequest) -> Result<IPCSetupRespon
     }
 }
 
-fn agent_paths(id: &[u8]) -> (PathBuf, PathBuf, PathBuf, String) {
+fn agent_paths(id: &ID) -> (PathBuf, PathBuf, PathBuf, String) {
     let agent_path = PathBuf::from(format!("{}/agent", env!("HOME")));
     let root_file = agent_path.join("root_file");
-    let hex_id = encode_hex(id);
-    let key_subdir = format!("{:02x}/", id[0]);
+    let hex_id = hex::encode(id.as_ref());
+    let key_subdir = format!("{:02x}/", id.as_ref()[0]);
     let key_path = agent_path.join(&key_subdir);
     let key_file = key_path.join(&hex_id);
     (root_file, key_path, key_file, hex_id)
@@ -73,7 +64,7 @@ fn register_key(id: &ID, key_bytes: &[u8], key_label: &[u8]) -> Result<(), Error
     let (root_file, key_path, key_file, _) = agent_paths(id);
 
     let mut enc_id = [0u8; 44];
-    Base64::encode(id, &mut enc_id).map_err(|_| Error::Encoding)?;
+    Base64::encode(id.as_ref(), &mut enc_id).map_err(|_| Error::Encoding)?;
 
     let entry = [b"\n", key_label, b" ", enc_id.as_slice()].concat();
 

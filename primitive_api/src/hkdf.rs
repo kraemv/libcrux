@@ -89,7 +89,7 @@ impl HKDFKey for HKDFKeyID {
     fn expand(&self, output_len: usize, info: &[u8]) -> Result<RandomKey, Error> {
         let agent = get_agent_by_idx(self.agent_idx)
             .ok_or_else(|| Error::Internal("No agent available".into()))?;
-        let id = agent.hkdf_expand(self.id, output_len, info).map_err(|_| Error::Expand)?;
+        let id = agent.hkdf_expand(self.id.clone(), output_len, info).map_err(|_| Error::Expand)?;
         agent.export_key(id).map_err(|_| Error::Expand)
     }
 }
@@ -99,8 +99,8 @@ impl SharedKey {
         Self { id, agent_idx }
     }
 
-    pub fn id(&self) -> ID {
-        self.id
+    pub fn id(&self) -> &ID {
+        &self.id
     }
 
     pub fn idx(&self) -> usize {

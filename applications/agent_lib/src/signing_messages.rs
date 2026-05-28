@@ -89,7 +89,7 @@ impl<'a, Scheme> TryFrom<&'a [u8]> for SignRequest<'a, Scheme> {
 
 impl<'a, Scheme> From<SignRequest<'a, Scheme>> for Vec<u8> {
     fn from(request: SignRequest<Scheme>) -> Self {
-        let mut result = request.id.to_vec();
+        let mut result = request.id.0.to_vec();
         result.extend(request.message);
         result
     }
@@ -161,7 +161,7 @@ impl SetupResponse<EcDsaP256PublicKey<SHA256>> {
     }
 
     pub fn as_bytes(&self) -> Vec<u8> {
-        let mut res = self.id.to_vec();
+        let mut res = self.id.0.to_vec();
         res.extend_from_slice(&self.pk.get_key().0);
         res
     }
@@ -173,7 +173,7 @@ impl SetupResponse<Ed25519PublicKey> {
     }
 
     pub fn as_bytes(&self) -> Vec<u8> {
-        let mut res = self.id.to_vec();
+        let mut res = self.id.0.to_vec();
         res.extend_from_slice(self.pk.as_bytes());
         res
     }
@@ -186,7 +186,7 @@ impl TryFrom<&[u8]> for SetupResponse<EcDsaP256PublicKey<SHA256>> {
         let (id, pk) = payload
             .split_at_checked(ID_SIZE)
             .ok_or(Error::MalformedRequest)?;
-        let id: [u8; 32] = id.try_into().map_err(|_| Error::MalformedRequest)?;
+        let id = ID::try_from(id).map_err(|_| Error::MalformedRequest)?;
         let pk: [u8; 64] = pk.try_into().map_err(|_| Error::MalformedRequest)?;
         let pk = EcDsaP256PublicKey::<SHA256>::from(ecdsa::p256::PublicKey(pk));
         Ok(Self { id, pk })
@@ -200,7 +200,7 @@ impl TryFrom<&[u8]> for SetupResponse<Ed25519PublicKey> {
         let (id, pk) = payload
             .split_at_checked(ID_SIZE)
             .ok_or(Error::MalformedRequest)?;
-        let id: [u8; 32] = id.try_into().map_err(|_| Error::MalformedRequest)?;
+        let id = ID::try_from(id).map_err(|_| Error::MalformedRequest)?;
         let pk: [u8; 32] = pk.try_into().map_err(|_| Error::MalformedRequest)?;
         let pk = Ed25519PublicKey::new(ed25519::VerificationKey::from_bytes(pk));
         Ok(Self { id, pk })
@@ -215,7 +215,7 @@ impl From<SetupResponse<EcDsaP256PublicKey<SHA256>>> for EcDsaP256PublicKey<SHA2
 
 impl From<SetupResponse<Ed25519PublicKey>> for Ed25519PublicKey {
     fn from(response: SetupResponse<Ed25519PublicKey>) -> Self {
-        Ed25519PublicKey::new(ed25519::VerificationKey::from_bytes(*response.get_id()))
+        Ed25519PublicKey::new(ed25519::VerificationKey::from_bytes(*response.get_id().as_ref()))
     }
 }
 

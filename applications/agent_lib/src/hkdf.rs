@@ -1,14 +1,13 @@
 use crate::kx::SharedKey;
 use crate::Error;
-use heapless::Vec;
+use crate::InnerRndBytes;
 use std::vec::Vec as std_vec;
 use libcrux_hkdf as hkdf;
 
 pub(crate) const SHA2_256_LEN: usize = hkdf::Algorithm::hash_len(hkdf::Algorithm::Sha256);
 
 pub struct PseudorandomKey ([u8; 32]);
-
-type InnerRndBytes = Vec<u8, 64>;
+#[derive(Clone)]
 pub struct RandomBytes (InnerRndBytes);
 
 impl SharedKey {
@@ -39,6 +38,10 @@ impl PseudorandomKey {
 impl RandomBytes {
     pub fn into_vec(&self) -> std_vec<u8> {
         self.0.to_vec()
+    }
+
+    pub(crate) fn copy_inner(&self) -> InnerRndBytes {
+        self.0.clone()
     }
 }
 

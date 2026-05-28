@@ -1,4 +1,6 @@
 use crate::hkdf_messages::*;
+use crate::hmac::{HmacSha256Mac, Sha2_256HMAC};
+use crate::hmac_messages::{HmacRequest, HmacResponse};
 use crate::ipc::IpcMessage;
 use crate::kex_messages::*;
 use crate::signatures::{EcDsaP256PublicKey, EcDsaP256SHA256, Ed25519, Ed25519PublicKey, SHA256};
@@ -19,6 +21,7 @@ pub enum MessageKind {
     HkdfExtractPublic,
     HkdfExtractSecret,
     HkdfExpand,
+    HmacSha2_256Authenticate,
     MlKem768KeyGen,
     MlKem768Decaps,
     MlKem768Encaps,
@@ -57,8 +60,8 @@ impl ExportRequest {
         Self { id }
     }
 
-    pub fn get_id(&self) -> ID {
-        self.id
+    pub fn get_id(&self) -> &ID {
+        &self.id
     }
 }
 
@@ -105,7 +108,7 @@ impl IpcMessage<SetupMessageKind> {
 
 impl From<ExportRequest> for IPCRequest {
     fn from(msg: ExportRequest) -> Self {
-        Self::new(MessageKind::Export, msg.get_id().to_vec())
+        Self::new(MessageKind::Export, msg.get_id().as_ref().to_vec())
     }
 }
 
@@ -190,8 +193,8 @@ impl From<X25519DeriveResponse> for IPCResponse {
 impl From<HkdfExtractRequest<ID>> for IPCRequest {
     fn from(request: HkdfExtractRequest<ID>) -> Self {
         let mut payload = request.get_header().as_bytes().to_vec();
-        if let Some(id) = request.get_id() { payload.extend_from_slice(&id) }
-        if let Some(salt) = request.get_salt() { payload.extend_from_slice(&salt) }
+        if let Some(id) = request.get_id() { payload.extend_from_slice(id.as_ref()) }
+        if let Some(salt) = request.get_salt() { payload.extend_from_slice(salt.as_ref()) }
         Self::new(MessageKind::HkdfExtractSecret, payload)
     }
 }
@@ -199,7 +202,7 @@ impl From<HkdfExtractRequest<ID>> for IPCRequest {
 impl<'a> From<HkdfExtractRequest<&'a [u8]>> for IPCRequest {
     fn from(request: HkdfExtractRequest<&'a [u8]>) -> Self {
         let mut payload = request.get_header().as_bytes().to_vec();
-        if let Some(id) = request.get_id() { payload.extend_from_slice(&id) }
+        if let Some(id) = request.get_id() { payload.extend_from_slice(id.as_ref()) }
         if let Some(salt) = request.get_salt() { payload.extend_from_slice(salt) }
         Self::new(MessageKind::HkdfExtractPublic, payload)
     }
@@ -226,6 +229,18 @@ impl From<HkdfExpandRequest<'_>> for IPCRequest {
 impl From<HkdfResponse<HkdfExpand>> for IPCResponse {
     fn from(msg: HkdfResponse<HkdfExpand>) -> Self {
         Self::new(MessageKind::HkdfExpand, msg.as_bytes().to_vec())
+    }
+}
+
+impl From<HmacRequest<'_, Sha2_256HMAC>> for IPCRequest {
+    fn from(request: HmacRequest<'_, Sha2_256HMAC>) -> Self {
+        Self::new(MessageKind::HmacSha2_256Authenticate, Vec::<u8>::from(request))
+    }
+}
+
+impl From<HmacResponse<HmacSha256Mac>> for IPCResponse {
+    fn from(msg: HmacResponse<HmacSha256Mac>) -> Self {
+        Self::new(MessageKind::HmacSha2_256Authenticate, msg.as_bytes().to_vec())
     }
 }
 
