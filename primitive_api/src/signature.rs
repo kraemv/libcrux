@@ -13,6 +13,15 @@ use libcrux_ecdsa::p256;
 use libcrux_ecdsa::DigestAlgorithm;
 use libcrux_ed25519 as ed25519;
 
+use der::{Any, Tagged, FixedTag};
+use der::oid::Arc as OidArc;
+use der::asn1::{BitString, OctetString, SetOfRef};
+use pkcs8::{ObjectIdentifier, PrivateKeyInfo};
+use pki_types::PrivatePkcs8KeyDer;
+use x509_cert::attr::Attribute;
+
+use crate::libcrux_provider::Ed25519SigningKey;
+
 pub type DefaultSigningKey = libcrux_ed25519::SigningKey;
 
 /// Signature Errors
@@ -28,7 +37,10 @@ pub enum Error {
 }
 
 pub trait Sig {}
+
+#[derive(Clone, Debug)]
 pub struct Ed25519{}
+#[derive(Clone, Debug)]
 pub struct EcDsaP256{}
 
 impl Sig for Ed25519 {}
@@ -79,9 +91,11 @@ impl Sig for EcDsaP256 {}
 /// Length requirements for variable length input/output schemes
 /// 
 /// In future: Default is PQ
-pub trait SigningKey: Send + Sync + Sized {
+pub trait SigningKey<const N: usize>: Send + Sync + Sized + for<'a> TryFrom<PrivatePkcs8KeyDer<'a>>{
     type PublicKey: VerificationKey + Sized;
-    type Signature;
+    type Signature: Into<[u8; N]>;
+
+    const SIG_LEN: usize = N;
 
     fn keygen() -> Result<(Self, Self::PublicKey), Error> {
         todo!()
@@ -92,6 +106,8 @@ pub trait SigningKey: Send + Sync + Sized {
 
     // Get the public key belonging to this Signing Key
     fn to_public(&self) -> &Self::PublicKey;
+
+    fn scheme(&self) -> SignatureScheme;
 }
 
 // A public key to verify a signature
@@ -108,28 +124,14 @@ pub enum SignatureScheme {
     Ed25519,
 }
 
+const LOCAL_KEY_ID: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.113549.1.9.21");
+
 #[derive(Clone, Copy, Debug)]
 pub struct SigningKeyID<Scheme: Sig, Vk: VerificationKey> {
     id: ID,
     public_key: Vk,
     marker: PhantomData<Scheme>,
 }
-
-/*impl Signature {
-    /// Convert the signature into a raw byte vector.
-    ///
-    /// * NIST P Curve signatures are returned as `r || s`.
-    pub fn into_vec(self) -> Vec<u8> {
-        match self {
-            Signature::EcDsaP256(s) => {
-                let signature = s.get_signature();
-                let (r, s) = signature.as_bytes();
-                [r, s.as_slice()].concat()
-            }
-            Signature::Ed25519(s) => s.as_bytes().to_vec(),
-        }
-    }
-}*/
 
 impl SigningKeyID<EcDsaP256, EcDsaP256PublicKey> {
     pub fn new(id: ID, public_key: EcDsaP256PublicKey) -> Self {
@@ -151,7 +153,7 @@ impl SigningKeyID<Ed25519, Ed25519PublicKey> {
     }
 }
 
-impl SigningKey for SigningKeyID<Ed25519, Ed25519PublicKey> {
+impl SigningKey<64> for SigningKeyID<Ed25519, Ed25519PublicKey> {
     type PublicKey = Ed25519PublicKey;
     type Signature = signatures::Ed25519Signature;
 
@@ -165,9 +167,39 @@ impl SigningKey for SigningKeyID<Ed25519, Ed25519PublicKey> {
     fn to_public(&self) -> &Self::PublicKey {
         &self.public_key
     }
+
+    fn scheme(&self) -> SignatureScheme {
+        SignatureScheme::Ed25519
+    }
 }
 
-impl SigningKey for SigningKeyID<EcDsaP256, EcDsaP256PublicKey> {
+impl TryFrom<PrivatePkcs8KeyDer<'_>> for SigningKeyID<Ed25519, Ed25519PublicKey> {
+    type Error = pkcs8::Error;
+
+    fn try_from(der: PrivatePkcs8KeyDer<'_>) -> Result<Self, Self::Error> {
+        type PkInfoType<'a> = PrivateKeyInfo<Any, OctetString, BitString, SetOfRef<'a, Attribute>>;
+
+        let private_key_info: PkInfoType = pkcs8::PrivateKeyInfo::try_from(der.secret_pkcs8_der())?;
+        let algo_oid_arcs: Vec<OidArc> = private_key_info.algorithm.oid.arcs().collect();
+
+        match algo_oid_arcs.as_slice() {
+            // `id-Ed25519' from RFC rfc8410
+            [1, 3, 101, 112] => {
+                let public_key = private_key_info.public_key.ok_or(pkcs8::Error::KeyMalformed)?;
+                let public_key: [u8; 32] = public_key.as_bytes().ok_or(pkcs8::Error::KeyMalformed)?.try_into().map_err(|_| pkcs8::Error::KeyMalformed)?;
+                let public_key = Ed25519PublicKey::new(ed25519::VerificationKey::from_bytes(public_key));
+
+                let attrs = private_key_info.attributes.ok_or(pkcs8::Error::KeyMalformed)?;
+                let id = extract_id(&attrs).ok_or(pkcs8::Error::KeyMalformed)?;
+
+                Ok(SigningKeyID::<Ed25519, Ed25519PublicKey>::new(id, public_key))
+            }
+            _ => Err(pkcs8::Error::KeyMalformed),
+        }
+    }
+}
+
+impl SigningKey<64> for SigningKeyID<EcDsaP256, EcDsaP256PublicKey> {
     type PublicKey = EcDsaP256PublicKey;
     type Signature = signatures::EcDsaP256Signature;
 
@@ -180,6 +212,49 @@ impl SigningKey for SigningKeyID<EcDsaP256, EcDsaP256PublicKey> {
 
     fn to_public(&self) -> &Self::PublicKey {
         &self.public_key
+    }
+
+    fn scheme(&self) -> SignatureScheme {
+        SignatureScheme::EcDsaP256(DigestAlgorithm::Sha256)
+    }
+}
+
+impl TryFrom<PrivatePkcs8KeyDer<'_>> for SigningKeyID<EcDsaP256, EcDsaP256PublicKey> {
+    type Error = pkcs8::Error;
+
+    fn try_from(der: PrivatePkcs8KeyDer<'_>) -> Result<Self, Self::Error> {
+        type PkInfoType<'a> = PrivateKeyInfo<Any, OctetString, BitString, SetOfRef<'a, Attribute>>;
+
+        let private_key_info: PkInfoType = pkcs8::PrivateKeyInfo::try_from(der.secret_pkcs8_der())?;
+        let algo_oid_arcs: Vec<OidArc> = private_key_info.algorithm.oid.arcs().collect();
+
+        match algo_oid_arcs.as_slice() {
+            // `id-ecPublicKey' from RFC 3279
+            [1, 2, 840, 10045, 2, 1] => {
+                let parameter_oid: ObjectIdentifier = private_key_info
+                    .algorithm
+                    .parameters
+                    .ok_or(pkcs8::Error::KeyMalformed)?
+                    .to_ref()
+                    .try_into().map_err(|_| pkcs8::Error::KeyMalformed)?;
+
+                let parameter_oid_arcs: Vec<OidArc> = parameter_oid.arcs().collect();
+
+                // Check it is an EcDsaP256 key
+                (parameter_oid_arcs.as_slice() == [1, 2, 840, 10045, 3, 1, 7]).then_some(()).ok_or(pkcs8::Error::KeyMalformed)?;
+
+                let public_key = private_key_info.public_key.ok_or(pkcs8::Error::KeyMalformed)?;
+                let public_key = public_key.as_bytes().ok_or(pkcs8::Error::KeyMalformed)?;
+                let public_key = decode_ecdsa_public_key(public_key.try_into().map_err(|_| pkcs8::Error::KeyMalformed)?)
+                            .map_err(|_| pkcs8::Error::KeyMalformed)?;
+
+                let attrs = private_key_info.attributes.ok_or(pkcs8::Error::KeyMalformed)?;
+                let id = extract_id(&attrs).ok_or(pkcs8::Error::KeyMalformed)?;
+
+                Ok(SigningKeyID::<EcDsaP256, EcDsaP256PublicKey>::new(id, public_key))
+            }
+            _ => Err(pkcs8::Error::KeyMalformed),
+        }
     }
 }
 
@@ -215,6 +290,51 @@ impl From<libcrux_ed25519::Error> for Error {
         match err {
             libcrux_ed25519::Error::InvalidSignature => Error::InvalidSignature,
             _ => Error::Verify,
+        }
+    }
+}
+
+fn extract_id(attrs: &SetOfRef<'_, Attribute>) -> Option<ID> {
+    let id = attrs.get(0)?;
+
+    let id = match id.oid {
+        LOCAL_KEY_ID => id.values.get(0),
+        _ => None,
+    }?;
+
+    match id.tag()  {
+        OctetString::TAG => id.value().try_into().ok(),
+        _ => None,
+    }
+}
+
+fn decode_ecdsa_public_key(public_key: [u8; 65]) -> Result<EcDsaP256PublicKey, pkcs8::Error> {
+    if public_key[0] != 4u8 {
+        return Err(pkcs8::Error::KeyMalformed);
+    } 
+    p256::PublicKey::try_from(&public_key[1..])
+        .map(|pk| EcDsaP256PublicKey::new(pk, DigestAlgorithm::Sha256))
+        .map_err(|_| pkcs8::Error::KeyMalformed)
+}
+
+impl TryFrom<PrivatePkcs8KeyDer<'_>> for Ed25519SigningKey {
+    type Error = pkcs8::Error;
+
+    fn try_from(der: PrivatePkcs8KeyDer<'_>) -> Result<Self, Self::Error> {
+        type PkInfoType<'a> = PrivateKeyInfo<Any, OctetString, BitString, SetOfRef<'a, Attribute>>;
+
+        let private_key_info: PkInfoType = pkcs8::PrivateKeyInfo::try_from(der.secret_pkcs8_der())?;
+        let algo_oid_arcs: Vec<OidArc> = private_key_info.algorithm.oid.arcs().collect();
+
+        match algo_oid_arcs.as_slice() {
+            // `id-Ed25519' from RFC rfc8410
+            [1, 3, 101, 112] => {
+                let private_key = private_key_info.private_key.as_bytes().try_into().map_err(|_| pkcs8::Error::KeyMalformed)?;
+                let private_key = libcrux_ed25519::SigningKey::from_bytes(private_key);
+
+                Ok(Ed25519SigningKey::new(private_key))
+            }
+            _ => Err(pkcs8::Error::KeyMalformed),
         }
     }
 }
