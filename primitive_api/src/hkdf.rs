@@ -13,7 +13,7 @@ pub enum Error {
     Expand,
 }
 
-pub struct SharedKey {
+pub struct SharedKeyID {
     id: ID,
     agent_idx: usize,
 }
@@ -53,7 +53,7 @@ fn resolve_agent(
     }
 }
 
-impl HKDFSource<ID> for SharedKey {
+impl HKDFSource<ID> for SharedKeyID {
     fn extract(key: Option<Self>, salt: Option<ID>) -> Result<impl HKDFKey, Error> {
         let (agent, agent_idx, id) = resolve_agent(key.map(|k| (k.id, k.agent_idx)))?;
         let id = agent.hkdf_extract_secret_salt(id, salt).map_err(|_| Error::Extract)?;
@@ -61,7 +61,7 @@ impl HKDFSource<ID> for SharedKey {
     }
 }
 
-impl HKDFSource<&[u8]> for SharedKey {
+impl HKDFSource<&[u8]> for SharedKeyID {
     fn extract(key: Option<Self>, salt: Option<&[u8]>) -> Result<impl HKDFKey, Error> {
         let (agent, agent_idx, id) = resolve_agent(key.map(|k| (k.id, k.agent_idx)))?;
         let id = agent.hkdf_extract_public_salt(id, salt).map_err(|_| Error::Extract)?;
@@ -94,7 +94,7 @@ impl HKDFKey for HKDFKeyID {
     }
 }
 
-impl SharedKey {
+impl SharedKeyID {
     pub fn new(id: ID, agent_idx: usize) -> Self {
         Self { id, agent_idx }
     }

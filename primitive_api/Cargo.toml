@@ -16,3 +16,8 @@ libcrux-ed25519.workspace = true
 libcrux-ml-kem.workspace=true
 libcrux-ml-kem.default-features=true
 libcrux-sha2.workspace=true
+
+der = { git = "https://github.com/kraemv/formats", rev = "c2da52f7", features = ["alloc", "oid"]}
+pkcs8 = { git = "https://github.com/kraemv/formats", rev = "c2da52f7", features = ["pem"]}
+pki-types = { package = "rustls-pki-types", version = "1" }
+x509-cert = { git = "https://github.com/kraemv/formats", rev = "c2da52f7", default-features = false }

@@ -111,6 +111,14 @@ impl From<[u8; 32]> for X25519PublicKey {
     }
 }
 
+impl TryFrom<&[u8]> for X25519PublicKey {
+    type Error = crate::Error;
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        let inner: [u8; 32] = bytes.try_into().map_err(|_| Error::Derive)?;
+        Ok(Self(inner))
+    }
+}
+
 impl AsRef<[u8]> for MlKem768PublicKey {
     fn as_ref(&self) -> &[u8] {
         &self.0

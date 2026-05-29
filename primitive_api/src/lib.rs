@@ -7,6 +7,9 @@ mod provider;
 pub mod signature;
 
 pub type RandomKey = Vec<u8>;
+
+pub trait NetworkObject: Send + Sync + Sized + AsRef<[u8]> + for<'a> TryFrom<&'a [u8]> {}
+
 /*
 Desired primitives / functionalities:
     All functions return a result

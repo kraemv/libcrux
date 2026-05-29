@@ -165,3 +165,20 @@ impl Ed25519PublicKey {
         self.0.as_ref()
     }
 }
+
+impl From<Ed25519Signature> for [u8; 64] {
+    fn from(sig: Ed25519Signature) -> Self {
+        sig.into_bytes()
+    }
+}
+
+impl From<EcDsaP256Signature::<SHA256>> for [u8; 64] {
+    fn from(sig: EcDsaP256Signature::<SHA256>) -> Self {
+        let mut out = [0u8; 64];
+        let sig = sig.get_signature();
+        let (r,s) = sig.as_bytes();
+        out[0..32].copy_from_slice(r);
+        out[32..64].copy_from_slice(s);
+        out
+    }
+}
