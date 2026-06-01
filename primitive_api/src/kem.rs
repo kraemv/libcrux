@@ -2,7 +2,6 @@ use std::marker::PhantomData;
 
 use crate::provider::{get_agent_and_idx, get_agent_by_idx};
 use crate::hkdf::SharedKeyID;
-use crate::hkdf::HKDFSource;
 
 use crate::NetworkObject;
 
@@ -35,7 +34,7 @@ pub trait DecapsKey: Send + Sync + Sized {
     fn keygen() -> Result<(Self, Self::PublicKey), Error>;
 
     // Decapsulate a key
-    fn decaps(&self, ct: Self::Ciphertext) -> Result<for T:Salt impl HKDFSource<T>, Error>;
+    fn decaps(&self, ct: Self::Ciphertext) -> Result<impl HKDFSource, Error>;
 
     // Get the scheme this key is for
     fn scheme(&self) -> KemScheme;

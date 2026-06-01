@@ -345,20 +345,14 @@ impl KeyStore {
     // ------------------------------------------------
     // HKDF
     // ------------------------------------------------
-    pub fn sha256_hkdf_extract_public_salt(&self, id: Option<&ID>, salt: Option<&[u8]>) -> Result<ID, Error> {
-        let entry = match id {
-            Some(id) => {
+    pub fn sha256_hkdf_extract_public_salt(&self, id: &ID, salt: &[u8]) -> Result<ID, Error> {
+        let entry = {
                 let mut entries = self.entries.write().map_err(|_| Error::HKDF)?;
                 entries.remove(id).ok_or(Error::UnknownID)?
-            }
-            None => {
-                let default_key = SecretKey::SharedSecret(SharedKey::new([0u8; 32]));
-                KeyStoreEntry::new(ID::from([0u8; 32]), default_key)
-            }
         };
 
         let pseudorandom_key = match entry.get_key() {
-            SecretKey::SharedSecret(key) => key.sha2_256_hkdf_extract(salt),
+            SecretKey::SharedSecret(key) => key.sha2_256_hkdf_extract(Some(salt)),
             _ => Err(Error::HKDF),
         }?;
 

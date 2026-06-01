@@ -1,6 +1,5 @@
 use crate::keys::*;
 use crate::Error;
-use libcrux_agent::ID;
 use libcrux_agent::hkdf_messages::*;
 use libcrux_agent::hmac::Sha2_256HMAC;
 use libcrux_agent::kex_messages::*;
@@ -54,12 +53,12 @@ pub(crate) fn handle_request(request: &IPCRequest) -> Result<IPCResponse, Error>
         }
 
         MessageKind::HkdfExtractPublic => {
-            let request = HkdfExtractRequest::<&[u8]>::try_from(request.get_payload())?;
+            let request = HkdfExtractPublicRequest::try_from(request.get_payload())?;
             handle_hkdf_extract_public_salt(&request)
         }
 
         MessageKind::HkdfExtractSecret => {
-            let request = HkdfExtractRequest::<ID>::try_from(request.get_payload())
+            let request = HkdfExtractSecretRequest::try_from(request.get_payload())
                 .map_err(|_| Error::MalformedRequest)?;
             handle_hkdf_extract_secret_salt(&request)
         }
@@ -126,22 +125,19 @@ pub(crate) fn handle_mlkem768_encaps(
 }
 
 pub(crate) fn handle_hkdf_extract_public_salt(
-    request: &HkdfExtractRequest<&[u8]>,
+    request: &HkdfExtractPublicRequest,
 ) -> Result<IPCResponse, Error> {
     hkdf_extract_public_salt(request.get_id(), request.get_salt())
         .map(|id| IPCResponse::from(HkdfResponse::<HkdfExtractPublicSalt>::new(id)))
 }
 
 pub(crate) fn handle_hkdf_extract_secret_salt(
-    request: &HkdfExtractRequest<ID>,
+    request: &HkdfExtractSecretRequest,
 ) -> Result<IPCResponse, Error> {
-    match request.get_salt() {
-        Some(salt_id) => hkdf_extract_secret_salt(request.get_id(), salt_id)
-            .map(|id| IPCResponse::from(HkdfResponse::<HkdfExtractSecretSalt>::new(id))),
-        None => hkdf_extract_public_salt(request.get_id(), None)
+        hkdf_extract_secret_salt(request.get_id(), request.get_salt())
             .map(|id| IPCResponse::from(HkdfResponse::<HkdfExtractSecretSalt>::new(id)))
-    }
 }
+
 
 pub(crate) fn handle_hkdf_expand(
     request: &HkdfExpandRequest<'_>,

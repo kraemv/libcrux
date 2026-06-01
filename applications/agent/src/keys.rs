@@ -47,7 +47,7 @@ pub fn export_key_material(id: &ID) -> Result<Vec<u8>, Error> {
     EPHEMERAL_KEY_STORE.export_key_material(id)
 }
 
-pub fn hkdf_extract_public_salt(id: Option<&ID>, salt: Option<&[u8]>) -> Result<ID, Error> {
+pub fn hkdf_extract_public_salt(id: &ID, salt: &[u8]) -> Result<ID, Error> {
     EPHEMERAL_KEY_STORE.sha256_hkdf_extract_public_salt(id, salt)
 }
 

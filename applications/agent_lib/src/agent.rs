@@ -218,16 +218,16 @@ impl Agent {
         ))
     }
 
-    pub fn hkdf_extract_public_salt(&self, id: Option<ID>, salt: Option<&[u8]>) -> Result<ID, Error> {
-        let response = self.send_recv(IPCRequest::from(HkdfExtractRequest::new(id, salt)))?;
+    pub fn hkdf_extract_public_salt(&self, id: ID, salt: &[u8]) -> Result<ID, Error> {
+        let response = self.send_recv(IPCRequest::from(HkdfExtractPublicRequest::new(id, salt)))?;
         let payload = Self::expect_kind(&response, MessageKind::HkdfExtractPublic)?;
         let r = HkdfResponse::<HkdfExtractPublicSalt>::try_ref_from_bytes(payload)
             .map_err(|_| Error::MalformedResponse)?;
         Ok(r.get_id().clone())
     }
 
-    pub fn hkdf_extract_secret_salt(&self, id: Option<ID>, salt: Option<ID>) -> Result<ID, Error> {
-        let response = self.send_recv(IPCRequest::from(HkdfExtractRequest::new(id, salt)))?;
+    pub fn hkdf_extract_secret_salt(&self, id: Option<ID>, salt: ID) -> Result<ID, Error> {
+        let response = self.send_recv(IPCRequest::from(HkdfExtractSecretRequest::new(id, salt)))?;
         let payload = Self::expect_kind(&response, MessageKind::HkdfExtractSecret)?;
         let r = HkdfResponse::<HkdfExtractSecretSalt>::try_ref_from_bytes(payload)
             .map_err(|_| Error::MalformedResponse)?;

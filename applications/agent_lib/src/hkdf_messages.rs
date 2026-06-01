@@ -14,10 +14,14 @@ pub enum HkdfExtractHeader {
     KeyExists,
 }
 
-pub struct HkdfExtractRequest<Salt> {
-    header: HkdfExtractHeader,
+pub struct HkdfExtractPublicRequest<'a> {
+    id: ID,
+    salt: &'a [u8],
+}
+
+pub struct HkdfExtractSecretRequest {
+    salt: ID,
     id: Option<ID>,
-    salt: Option<Salt>,
 }
 
 // Wire: [id: ID][output_len: u32 LE][info: remaining bytes]
@@ -34,67 +38,63 @@ pub struct HkdfResponse<Event> {
     event: PhantomData<Event>,
 }
 
-impl<Salt> HkdfExtractRequest<Salt> {
-    pub fn new(id: Option<ID>, salt: Option<Salt>) -> Self 
+impl<'a> HkdfExtractPublicRequest<'a> {
+    pub fn new(id: ID, salt: &'a [u8]) -> Self 
     {
-        let header = match id {
-            None => HkdfExtractHeader::KeyAbsent,
-            Some(_) => HkdfExtractHeader::KeyExists,
-        };
-        Self { header, id, salt }
+        Self { id, salt }
+    }
+
+    pub fn get_id(&self) -> &ID {
+        &self.id
+    }
+
+    pub fn get_salt(&self) -> &'a [u8] {
+        self.salt
+    }
+}
+
+impl HkdfExtractSecretRequest {
+    pub fn new(id: Option<ID>, salt: ID) -> Self 
+    {
+        Self { id, salt }
     }
 
     pub fn get_id(&self) -> Option<&ID> {
         self.id.as_ref()
     }
 
-    pub fn get_header(&self) -> &HkdfExtractHeader {
-        &self.header
+    pub fn get_salt(&self) -> &ID {
+        &self.salt
     }
 }
 
-impl HkdfExtractRequest<ID> {
-    pub fn get_salt(&self) -> Option<&ID> {
-        self.salt.as_ref()
-    }
-}
-
-impl HkdfExtractRequest<&[u8]> {
-    pub fn get_salt(&self) -> Option<&[u8]> {
-        self.salt
-    }
-}
-
-impl<'a> TryFrom<&'a [u8]> for HkdfExtractRequest<ID> {
+impl<'a> TryFrom<&'a [u8]> for HkdfExtractPublicRequest<'a> {
     type Error = Error;
 
     fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
-        let (header, bytes) = HkdfExtractHeader::try_read_from_prefix(bytes).map_err(|_| Error::MalformedRequest)?;
-        let (id, salt) = match header {
-            HkdfExtractHeader::KeyAbsent => (None, bytes),
-            HkdfExtractHeader::KeyExists => ID::try_read_from_prefix(bytes).map(|(id, bytes)| (Some(id), bytes)).map_err(|_| Error::MalformedRequest)?,
-        };
-        let salt = match salt.first() {
-            None => None,
-            Some(_) => Some(ID::try_read_from_bytes(salt).map_err(|_| Error::MalformedRequest)?),
-        };
 
-        Ok(Self { header, id, salt })
+        let (id, salt) = ID::try_read_from_prefix(bytes).map_err(|_| Error::MalformedRequest)?;
+
+        Ok(Self {id, salt })
     }
 }
 
-impl<'a> TryFrom<&'a [u8]> for HkdfExtractRequest<&'a [u8]> {
+const ID_SIZE: usize = size_of::<ID>();
+
+impl<'a> TryFrom<&'a [u8]> for HkdfExtractSecretRequest {
     type Error = Error;
 
     fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
-        let (header, bytes) = HkdfExtractHeader::try_read_from_prefix(bytes).map_err(|_| Error::MalformedRequest)?;
-        let (id, salt) = match header {
-            HkdfExtractHeader::KeyAbsent => (None, bytes),
-            HkdfExtractHeader::KeyExists => ID::try_read_from_prefix(bytes).map(|(id, bytes)| (Some(id), bytes)).map_err(|_| Error::MalformedRequest)?,
+        let (salt, key) = match bytes.len() {
+            ID_SIZE => (ID::try_read_from_bytes(bytes).map_err(|_| Error::MalformedRequest)?, None),
+            _ => {
+                let (salt, bytes) = ID::try_read_from_prefix(bytes).map_err(|_| Error::MalformedRequest)?;
+                let key = ID::try_read_from_bytes(bytes).map_err(|_| Error::MalformedRequest)?;
+                (salt, Some(key))
+            }
         };
-        let salt = salt.first().map(|_| salt);
 
-        Ok(Self { header, id, salt })
+        Ok(Self { salt, id: key })
     }
 }
 

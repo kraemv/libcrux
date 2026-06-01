@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 use std::fmt::Debug;
 
 use crate::provider::{get_agent_and_idx, get_agent_by_idx};
-use crate::hkdf::{HKDFSource, SharedKeyID};
+use crate::hkdf::{SharedKeyID};
 use crate::NetworkObject;
 use libcrux_agent::ID;
 use libcrux_agent::kx::X25519PublicKey;

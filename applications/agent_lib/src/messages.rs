@@ -190,20 +190,18 @@ impl From<X25519DeriveResponse> for IPCResponse {
     }
 }
 
-impl From<HkdfExtractRequest<ID>> for IPCRequest {
-    fn from(request: HkdfExtractRequest<ID>) -> Self {
-        let mut payload = request.get_header().as_bytes().to_vec();
+impl From<HkdfExtractSecretRequest> for IPCRequest {
+    fn from(request: HkdfExtractSecretRequest) -> Self {
+        let mut payload = request.get_salt().as_bytes().to_vec();
         if let Some(id) = request.get_id() { payload.extend_from_slice(id.as_ref()) }
-        if let Some(salt) = request.get_salt() { payload.extend_from_slice(salt.as_ref()) }
         Self::new(MessageKind::HkdfExtractSecret, payload)
     }
 }
 
-impl<'a> From<HkdfExtractRequest<&'a [u8]>> for IPCRequest {
-    fn from(request: HkdfExtractRequest<&'a [u8]>) -> Self {
-        let mut payload = request.get_header().as_bytes().to_vec();
-        if let Some(id) = request.get_id() { payload.extend_from_slice(id.as_ref()) }
-        if let Some(salt) = request.get_salt() { payload.extend_from_slice(salt) }
+impl<'a> From<HkdfExtractPublicRequest<'a>> for IPCRequest {
+    fn from(request: HkdfExtractPublicRequest<'a>) -> Self {
+        let mut payload = request.get_id().as_bytes().to_vec();
+        payload.extend_from_slice(request.get_salt().as_bytes());
         Self::new(MessageKind::HkdfExtractPublic, payload)
     }
 }
