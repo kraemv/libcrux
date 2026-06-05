@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::provider::{get_agent_and_idx, get_agent_by_idx};
-use crate::hkdf::SharedKeyID;
+use crate::hkdf::{HkdfIkm, SharedKeyID};
 
 use crate::NetworkObject;
 
@@ -29,12 +29,13 @@ impl Kem for MlKem768 {}
 pub trait DecapsKey: Send + Sync + Sized {
     type PublicKey: EncapsKey + Sized;
     type Ciphertext: NetworkObject;
+    type SharedSecret: HkdfIkm + Into<Vec<u8>>;
 
     // Generate a private-public key pair
     fn keygen() -> Result<(Self, Self::PublicKey), Error>;
 
     // Decapsulate a key
-    fn decaps(&self, ct: Self::Ciphertext) -> Result<impl HKDFSource, Error>;
+    fn decaps(&self, ct: Self::Ciphertext) -> Result<Self::SharedSecret, Error>;
 
     // Get the scheme this key is for
     fn scheme(&self) -> KemScheme;
@@ -42,9 +43,10 @@ pub trait DecapsKey: Send + Sync + Sized {
 
 pub trait EncapsKey: Send + Sync + AsRef<[u8]> + for<'a> TryFrom<&'a [u8]> {
     type Ciphertext: NetworkObject;
+    type SharedSecret: HkdfIkm + Into<Vec<u8>>;
 
     // Encapsulate a key and get the encapsulated key
-    fn encaps(&self) -> Result<(impl HKDFSource, Self::Ciphertext), Error>;
+    fn encaps(&self) -> Result<(Self::SharedSecret, Self::Ciphertext), Error>;
 
     // Get the scheme this key is for
     fn scheme(&self) -> KemScheme;
@@ -66,6 +68,7 @@ pub struct DecapsKeyID<Scheme: Kem> {
 impl DecapsKey for DecapsKeyID<MlKem768> {
     type PublicKey = MlKem768PublicKey;
     type Ciphertext = MlKem768Ciphertext;
+    type SharedSecret = SharedKeyID;
 
     fn keygen() -> Result<(Self, Self::PublicKey), Error> {
         let (agent, agent_idx) =
@@ -85,7 +88,7 @@ impl DecapsKey for DecapsKeyID<MlKem768> {
             .map_err(|_| Error::KeyGen)
     }
 
-    fn decaps(&self, ct:MlKem768Ciphertext ) -> Result<impl HKDFSource, Error> {
+    fn decaps(&self, ct:MlKem768Ciphertext ) -> Result<SharedKeyID, Error> {
         let agent = get_agent_by_idx(self.agent_idx)
             .ok_or_else(|| Error::Internal("No agent available".into()))?;
         let id = agent
@@ -101,8 +104,9 @@ impl DecapsKey for DecapsKeyID<MlKem768> {
 
 impl EncapsKey for MlKem768PublicKey {
     type Ciphertext = MlKem768Ciphertext;
+    type SharedSecret = SharedKeyID;
 
-    fn encaps(&self) -> Result<(impl HKDFSource, MlKem768Ciphertext), Error> {
+    fn encaps(&self) -> Result<(SharedKeyID, MlKem768Ciphertext), Error> {
         let (agent, agent_idx) = get_agent_and_idx().ok_or_else(|| Error::Internal("No agent available".into()))?;
         let (id, ct) = agent
             .mlkem_768_encaps_for_id(self)

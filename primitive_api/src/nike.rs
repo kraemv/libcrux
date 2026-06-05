@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 use std::fmt::Debug;
 
 use crate::provider::{get_agent_and_idx, get_agent_by_idx};
-use crate::hkdf::{SharedKeyID};
+use crate::hkdf::{HkdfIkm, SharedKeyID};
 use crate::NetworkObject;
 use libcrux_agent::ID;
 use libcrux_agent::kx::X25519PublicKey;
@@ -27,12 +27,13 @@ impl Nike for X25519 {}
 
 pub trait NIKESecretKey: Send + Sync + Sized {
     type PublicKey: Debug + NetworkObject;
+    type SharedSecret: HkdfIkm + Into<Vec<u8>>;
 
     // Generate a private-public key pair
     fn keygen() -> Result<(Self, Self::PublicKey), Error>;
 
     // Derive a shared secret
-    fn derive(self, pk: Self::PublicKey) -> Result<impl HKDFSource, Error>;
+    fn derive(self, pk: Self::PublicKey) -> Result<Self::SharedSecret, Error>;
 
     // Get the scheme this key is for
     fn scheme(&self) -> NIKEScheme;
@@ -52,6 +53,7 @@ pub struct NIKESecretKeyID<Scheme: Nike> {
 
 impl NIKESecretKey for NIKESecretKeyID<X25519> {
     type PublicKey = X25519PublicKey;
+    type SharedSecret = SharedKeyID;
 
     fn keygen() -> Result<(Self, Self::PublicKey), Error> {
         let (agent, agent_idx) =
@@ -71,7 +73,7 @@ impl NIKESecretKey for NIKESecretKeyID<X25519> {
             .map_err(|_| Error::KeyGen)
     }
 
-    fn derive(self, pk: Self::PublicKey) -> Result<impl HKDFSource, Error> {
+    fn derive(self, pk: Self::PublicKey) -> Result<SharedKeyID, Error> {
         let agent = get_agent_by_idx(self.agent_idx)
             .ok_or_else(|| Error::Internal("No agent available".into()))?;
         let id = agent

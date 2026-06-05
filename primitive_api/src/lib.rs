@@ -10,10 +10,10 @@ pub type RandomKey = Vec<u8>;
 
 pub trait Implementation {}
 
-struct Lib{}
-struct AgentLib{}
+// struct Lib{}
+pub struct AgentLib{}
 
-impl Implementation for Lib {}
+// impl Implementation for Lib {}
 impl Implementation for AgentLib {}
 
 pub trait NetworkObject: Send + Sync + Sized + AsRef<[u8]> + for<'a> TryFrom<&'a [u8]> {}
