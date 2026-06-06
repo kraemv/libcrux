@@ -11,10 +11,7 @@ use crate::DigestAlgorithm;
 
 /// A P-256 Signature
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Signature {
-    r: [u8; 32],
-    s: [u8; 32],
-}
+pub struct Signature ([u8; 64]);
 
 /// An ECDSA P-256 nonce
 pub struct Nonce([u8; 32]);
@@ -32,20 +29,20 @@ mod conversions {
     impl Signature {
         /// Generate a signature from the raw values r and s.
         pub fn from_raw(r: [u8; 32], s: [u8; 32]) -> Self {
-            Self { r, s }
+            let mut sig = [0u8; 64];
+            sig[0..32].copy_from_slice(&r);
+            sig[32..].copy_from_slice(&s);
+            Self(sig)
         }
 
         /// Generate a signature from the raw values r || s.
         pub fn from_bytes(signature_bytes: [u8; 64]) -> Self {
-            Self {
-                r: signature_bytes[0..32].try_into().unwrap(),
-                s: signature_bytes[32..].try_into().unwrap(),
-            }
+            Self(signature_bytes)
         }
 
         /// Get the signature as the two raw 32 bytes `(r, s)`.
-        pub fn as_bytes(&self) -> (&[u8; 32], &[u8; 32]) {
-            (&self.r, &self.s)
+        pub fn as_bytes(&self) -> &[u8; 64] {
+            &self.0
         }
     }
 
@@ -304,14 +301,7 @@ fn _sign(
         return Err(Error::SigningError);
     }
 
-    Ok(Signature {
-        r: signature[..32]
-            .try_into()
-            .map_err(|_| Error::SigningError)?,
-        s: signature[32..]
-            .try_into()
-            .map_err(|_| Error::SigningError)?,
-    })
+    Ok(Signature(signature))
 }
 
 fn u32_len(bytes: &[u8]) -> Result<u32, Error> {
@@ -358,13 +348,13 @@ pub fn verify(
 
     let success = match hash {
         libcrux_sha2::Algorithm::Sha256 => {
-            ecdsa_verif_p256_sha2(len, payload, &public_key.0, &signature.r, &signature.s)
+            ecdsa_verif_p256_sha2(len, payload, &public_key.0, &signature.0[0..32], &signature.0[32..])
         }
         libcrux_sha2::Algorithm::Sha384 => {
-            ecdsa_verif_p256_sha384(len, payload, &public_key.0, &signature.r, &signature.s)
+            ecdsa_verif_p256_sha384(len, payload, &public_key.0, &signature.0[0..32], &signature.0[32..])
         }
         libcrux_sha2::Algorithm::Sha512 => {
-            ecdsa_verif_p256_sha512(len, payload, &public_key.0, &signature.r, &signature.s)
+            ecdsa_verif_p256_sha512(len, payload, &public_key.0, &signature.0[0..32], &signature.0[32..])
         }
         libcrux_sha2::Algorithm::Sha224 => return Err(Error::UnsupportedHash),
     };

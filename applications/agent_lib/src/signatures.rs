@@ -48,7 +48,7 @@ impl EcDsaP256Signature<SHA256> {
     }
 }
 
-impl From<ecdsa::p256::Signature> for EcDsaP256Signature<SHA256> {
+impl<Algo> From<ecdsa::p256::Signature> for EcDsaP256Signature<Algo> {
     fn from(sig: ecdsa::p256::Signature) -> Self {
         Self { sig, _marker: PhantomData }
     }
@@ -66,7 +66,7 @@ impl EcDsaP256PublicKey<SHA256> {
     }
 }
 
-impl From<ecdsa::p256::PublicKey> for EcDsaP256PublicKey<SHA256> {
+impl<Algo> From<ecdsa::p256::PublicKey> for EcDsaP256PublicKey<Algo> {
     fn from(vk: ecdsa::p256::PublicKey) -> Self {
         Self { key: vk, _marker: PhantomData }
     }
@@ -172,13 +172,72 @@ impl From<Ed25519Signature> for [u8; 64] {
     }
 }
 
-impl From<EcDsaP256Signature::<SHA256>> for [u8; 64] {
-    fn from(sig: EcDsaP256Signature::<SHA256>) -> Self {
-        let mut out = [0u8; 64];
-        let sig = sig.get_signature();
-        let (r,s) = sig.as_bytes();
-        out[0..32].copy_from_slice(r);
-        out[32..64].copy_from_slice(s);
-        out
+impl<Algo> From<EcDsaP256Signature<Algo>> for [u8; 64] {
+    fn from(sig: EcDsaP256Signature<Algo>) -> Self {
+        *sig.get_signature().as_bytes()
+    }
+}
+
+impl TryFrom<&[u8]> for Ed25519PublicKey {
+    type Error = Error;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        bytes.try_into()
+            .map(|bytes| Self::new(ed25519::VerificationKey::from_bytes(bytes)))
+            .map_err(|_| Error::PublicKey)   
+    }
+}
+
+impl AsRef<[u8]> for Ed25519PublicKey {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
+impl TryFrom<&[u8]> for Ed25519Signature {
+    type Error = Error;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        bytes.try_into()
+            .map(|bytes| Self::new(ed25519::Signature::from_bytes(bytes)))
+            .map_err(|_| Error::Signing)   
+    }
+}
+
+impl AsRef<[u8]> for Ed25519Signature {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
+impl<Algo> TryFrom<&[u8]> for EcDsaP256PublicKey<Algo> {
+    type Error = Error;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        ecdsa::p256::PublicKey::try_from(bytes)
+            .map(Self::from)
+            .map_err(|_| Error::PublicKey)   
+    }
+}
+
+impl<Algo> AsRef<[u8]> for EcDsaP256PublicKey<Algo> {
+    fn as_ref(&self) -> &[u8] {
+        self.key.as_ref()
+    }
+}
+
+impl<Algo> TryFrom<&[u8]> for EcDsaP256Signature<Algo> {
+    type Error = Error;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        bytes.try_into()
+            .map(|bytes| Self::from(ecdsa::p256::Signature::from_bytes(bytes)))
+            .map_err(|_| Error::Signing)   
+    }
+}
+
+impl<Algo> AsRef<[u8]> for EcDsaP256Signature<Algo> {
+    fn as_ref(&self) -> &[u8] {
+        self.sig.as_bytes()
     }
 }

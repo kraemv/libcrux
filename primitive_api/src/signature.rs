@@ -6,6 +6,7 @@
 use core::fmt::Debug;
 use std::marker::PhantomData;
 
+use crate::NetworkObject;
 use crate::provider::get_agent;
 use libcrux_agent::signatures::{EcDsaP256PublicKey, Ed25519PublicKey, SHA256};
 use libcrux_agent::{signatures, ID};
@@ -43,6 +44,11 @@ pub struct EcDsaP256{}
 
 impl Sig for Ed25519 {}
 impl Sig for EcDsaP256 {}
+
+impl NetworkObject for EcDsaP256PublicKey<SHA256> { }
+impl NetworkObject for signatures::EcDsaP256Signature<SHA256>{ }
+impl NetworkObject for Ed25519PublicKey { }
+impl NetworkObject for signatures::Ed25519Signature{ }
 
 /// Minimal example:
 /// ```
@@ -90,8 +96,8 @@ impl Sig for EcDsaP256 {}
 /// 
 /// In future: Default is PQ
 pub trait SigningKey<const N: usize>: Send + Sync + Sized + for<'a> TryFrom<PrivatePkcs8KeyDer<'a>>{
-    type PublicKey: VerificationKey + Sized;
-    type Signature: Into<[u8; N]>;
+    type PublicKey: VerificationKey + NetworkObject;
+    type Signature: NetworkObject;
 
     fn keygen() -> Result<(Self, Self::PublicKey), Error> {
         todo!()
@@ -107,11 +113,16 @@ pub trait SigningKey<const N: usize>: Send + Sync + Sized + for<'a> TryFrom<Priv
 }
 
 // A public key to verify a signature
-pub trait VerificationKey: Debug + Send + Sync {
-    type Signature;
+pub trait VerificationKey: NetworkObject{
+    type Signature: NetworkObject;
+    const SCHEME: SignatureScheme;
 
     // Check if the signature is valid for the given payload and key
     fn verify(&self, payload: &[u8], signature: Self::Signature) -> Result<(), Error>;
+
+    fn scheme(&self) -> SignatureScheme{
+        Self::SCHEME
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -256,6 +267,7 @@ impl TryFrom<PrivatePkcs8KeyDer<'_>> for SigningKeyID<EcDsaP256, EcDsaP256Public
 
 impl VerificationKey for Ed25519PublicKey {
     type Signature = libcrux_agent::signatures::Ed25519Signature;
+    const SCHEME: SignatureScheme = SignatureScheme::Ed25519;
 
     fn verify(&self, payload: &[u8], signature: Self::Signature) -> Result<(), Error> {
         ed25519::verify(payload, &self.into_bytes(), signature.get_signature())
@@ -265,6 +277,7 @@ impl VerificationKey for Ed25519PublicKey {
 
 impl VerificationKey for EcDsaP256PublicKey::<SHA256> {
     type Signature = libcrux_agent::signatures::EcDsaP256Signature::<SHA256>;
+    const SCHEME: SignatureScheme = SignatureScheme::EcDsaP256(DigestAlgorithm::Sha256);
 
     fn verify(&self, payload: &[u8], signature: Self::Signature) -> Result<(), Error> {
         p256::verify(DigestAlgorithm::Sha256, payload, &signature.get_signature(), self.get_key())
@@ -289,6 +302,7 @@ impl From<libcrux_ed25519::Error> for Error {
         }
     }
 }
+
 
 fn extract_id(attrs: &SetOfRef<'_, Attribute>) -> Option<ID> {
     let id = attrs.get(0)?;

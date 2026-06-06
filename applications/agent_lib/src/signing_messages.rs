@@ -97,11 +97,7 @@ impl<'a, Scheme> From<SignRequest<'a, Scheme>> for Vec<u8> {
 
 impl From<EcDsaP256Signature<SHA256>> for SignResponse<EcDsaP256SHA256> {
     fn from(sig: EcDsaP256Signature<SHA256>) -> Self {
-        let mut signature = [0u8; 64];
-        let signature_components = sig.get_signature();
-        let (r, s) = signature_components.as_bytes();
-        signature[..32].copy_from_slice(r);
-        signature[32..].copy_from_slice(s);
+        let signature = *sig.get_signature().as_bytes();
         Self { signature, _marker: PhantomData }
     }
 }
