@@ -2,7 +2,8 @@ use libcrux_agent::agent::Agent;
 use std::path::PathBuf;
 use std::sync::{LazyLock, Mutex, MutexGuard};
 
-const AGENT_NUM: usize = 16;
+// TODO: Document, that any other choice is invalid because HKDF
+const AGENT_NUM: usize = 1;
 
 static AGENTS: LazyLock<Vec<Mutex<Agent>>> = LazyLock::new(|| {
     let mut agents = Vec::with_capacity(AGENT_NUM);
