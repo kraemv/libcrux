@@ -24,7 +24,7 @@ pub struct HkdfExtractSecretRequest {
     id: Option<ID>,
 }
 
-// Wire: [id: ID][output_len: u32 LE][info: remaining bytes]
+// Wire: [id: ID][output_len: usize LE][info: remaining bytes]
 pub struct HkdfExpandRequest<'a> {
     id: ID,
     output_len: usize,
@@ -132,7 +132,7 @@ impl From<HkdfExpandRequest<'_>> for Vec<u8> {
     fn from(request: HkdfExpandRequest<'_>) -> Self {
         let mut result = Vec::new();
         result.extend_from_slice(request.id.as_ref());
-        result.extend_from_slice(&(request.output_len as u32).to_le_bytes());
+        result.extend_from_slice(&request.output_len.to_le_bytes());
         result.extend_from_slice(request.info);
         result
     }

@@ -27,7 +27,8 @@ impl PseudorandomKey {
     }
 
     pub fn sha2_256_hkdf_expand(&self, info: &[u8], outlen: usize) -> Result<RandomBytes, Error> {
-        let mut okm = InnerRndBytes::new();
+        let mut okm = InnerRndBytes::from_array([0u8; 64]);
+        okm.truncate(outlen);
         let okm_ref = okm.get_mut(0..outlen).ok_or(Error::HKDF)?;
         hkdf::Hkdf::<hkdf::Sha2_256>::expand_arrayref(okm_ref, &self.0, info)
             .map(|_| RandomBytes(okm))
