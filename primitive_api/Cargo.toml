@@ -22,3 +22,6 @@ der = { git = "https://github.com/kraemv/formats", rev = "c2da52f7", features = 
 pkcs8 = { git = "https://github.com/kraemv/formats", rev = "c2da52f7", features = ["pem"]}
 pki-types = { package = "rustls-pki-types", version = "1" }
 x509-cert = { git = "https://github.com/kraemv/formats", rev = "c2da52f7", default-features = false }
+
+rand = { version = "0.9" }
+rand_chacha = "0.9.0"

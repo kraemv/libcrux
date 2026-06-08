@@ -2,11 +2,12 @@ use std::marker::PhantomData;
 
 use libcrux_agent::hkdf::PseudorandomKey;
 use libcrux_agent::ID;
+use libcrux_agent::kx::SharedKey;
 use libcrux_hkdf;
 use libcrux_sha2::SHA256_LENGTH;
 
 use crate::hash::{Hash, Sha2_256};
-use crate::{AgentLib, Implementation, RandomKey};
+use crate::{AgentLib, Implementation, NetworkObject, RandomKey};
 use crate::provider::get_agent_by_idx;
 
 /// HKDF Errors
@@ -28,6 +29,7 @@ pub struct SharedKeyID {
 impl<const N: usize, Algo: Hash<N>> SaltValue for HKDFKeyID<N, Algo> {}
 impl SaltValue for Option<Vec<u8>> {}
 impl HkdfIkm for SharedKeyID{}
+impl HkdfIkm for SharedKey {}
 
 const SHA2_256_SALT: [u8; SHA256_LENGTH] = [0u8; SHA256_LENGTH];
 pub trait RandomnessExtractor: Send + Sync {
@@ -50,8 +52,9 @@ pub trait SaltedRandomnessExtractor {
 
 pub trait HKDFKey: Send + Sync {
     const N: usize;
+    type Okm: NetworkObject;
 
-    fn expand(&self, output_len: usize, info: &[u8]) -> Result<RandomKey, Error>;
+    fn expand(&self, output_len: usize, info: &[u8]) -> Result<Self::Okm, Error>;
 }
 
 pub struct Hkdf<const N: usize, Algo: Hash<N>, Impl: Implementation>{marker: PhantomData<(Algo, Impl)>}
@@ -136,6 +139,7 @@ impl SaltedRandomnessExtractor for Sha256SecretSaltedHKDF {
 }
 impl HKDFKey for HKDFKeyID<SHA256_LENGTH, Sha2_256> {
     const N: usize = SHA256_LENGTH;
+    type Okm = RandomKey;
     
     fn expand(&self, output_len: usize, info: &[u8]) -> Result<RandomKey, Error> {
         let agent = get_agent_by_idx(self.agent_idx)
@@ -147,6 +151,7 @@ impl HKDFKey for HKDFKeyID<SHA256_LENGTH, Sha2_256> {
 
 impl HKDFKey for PseudorandomKey {
     const N: usize = SHA256_LENGTH;
+    type Okm = RandomKey;
 
     fn expand(&self, output_len: usize, info: &[u8]) -> Result<RandomKey, Error> {
         self.sha2_256_hkdf_expand(info, output_len)

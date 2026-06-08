@@ -1,9 +1,10 @@
 use std::marker::PhantomData;
 
-use libcrux_agent::{ID, hmac::{HmacSha256Mac, Sha2_256HMAC}};
+use libcrux_agent::{ID, hmac::{HmacSha256Key, HmacSha256Mac, Sha2_256HMAC}};
 
-use crate::provider::get_agent_by_idx;
+use crate::{NetworkObject, provider::get_agent_by_idx};
 
+#[derive(Debug)]
 pub enum Error {
     Internal(String),
     InvalidTag,
@@ -15,8 +16,8 @@ pub enum MacAlgorithm {
     HmacSha2_256,
 }
 
-pub trait AuthenticationKey {
-    type Tag: Eq;
+pub trait AuthenticationKey: Send + Sync + for <'a> TryFrom<&'a[u8]>{
+    type Tag: Eq + NetworkObject;
 
     fn authenticate(&self, msg: &[u8]) -> Result<Self::Tag, Error>;
 
@@ -48,3 +49,28 @@ impl AuthenticationKey for MacKeyId<Sha2_256HMAC> {
         MacAlgorithm::HmacSha2_256
     }
 }
+
+impl AuthenticationKey for HmacSha256Key {
+    type Tag = HmacSha256Mac;
+
+    fn authenticate(&self, msg: &[u8]) -> Result<Self::Tag, Error> {
+        Ok(self.authenticate(msg))
+    }
+
+    fn scheme() -> MacAlgorithm {
+        MacAlgorithm::HmacSha2_256
+    }
+}
+
+impl<Scheme> TryFrom<&[u8]> for MacKeyId<Scheme> {
+    type Error = Error;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        let (id, idx) = value.split_at_checked(size_of::<ID>()).ok_or( Error::Internal("Malformed shared key".to_string()))?;
+        let id = ID::try_from(id).map_err(|_| Error::Internal("Malformed ID".to_string()))?;
+        let agent_idx = usize::from_be_bytes(idx.try_into().map_err(|_| Error::Internal("Malformed ID".to_string()))?);
+        Ok(MacKeyId::<Scheme> { id, agent_idx, scheme: PhantomData })
+    }
+}
+
+impl NetworkObject for HmacSha256Mac {}

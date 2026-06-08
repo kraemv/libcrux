@@ -5,7 +5,12 @@ use crate::provider::{get_agent_and_idx, get_agent_by_idx};
 use crate::hkdf::{HkdfIkm, SharedKeyID};
 use crate::NetworkObject;
 use libcrux_agent::ID;
-use libcrux_agent::kx::X25519PublicKey;
+use libcrux_agent::kx::{SharedKey, X25519PublicKey, X25519SecretKey};
+use libcrux_curve25519 as curve25519;
+use libcrux_curve25519::ecdh_api::EcdhOwned;
+
+use rand::{RngCore, SeedableRng};
+use rand_chacha::ChaChaRng;
 
 /// NIKE Errors
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,4 +92,28 @@ impl NIKESecretKey for NIKESecretKeyID<X25519> {
     }
 }
 
+impl NIKESecretKey for X25519SecretKey {
+    type PublicKey = X25519PublicKey;
+    type SharedSecret = SharedKey;
+
+    fn keygen() -> Result<(Self, Self::PublicKey), Error> {
+        let mut rng = ChaChaRng::from_os_rng();
+        let mut rand = [0u8; 32];
+        rng.fill_bytes(&mut rand);
+        let (pub_key, priv_key) =
+            curve25519::X25519::generate_pair(&rand).map_err(|_| Error::KeyGen)?;
+
+        let key = X25519SecretKey::new(priv_key);
+        let pk = X25519PublicKey::new(pub_key);
+        Ok((key, pk))
+    }
+
+    fn derive(self, pk: Self::PublicKey) -> Result<Self::SharedSecret, Error> {
+        X25519SecretKey::derive(&self, &pk).map_err(|_| Error::Derive)
+    }
+
+    fn scheme(&self) -> NIKEScheme {
+        NIKEScheme::X25519
+    }
+}
 impl NetworkObject for X25519PublicKey{}

@@ -18,7 +18,9 @@ impl Implementation for AgentLib {}
 
 pub trait NetworkObject: Send + Sync + Sized + AsRef<[u8]> + for<'a> TryFrom<&'a [u8]> {}
 
+impl NetworkObject for Vec<u8> {}
 // TODO: Add Impl generic for ambiguos types like salts and KEM PK
+// TODO: Add generic Agent key for id/idx pair
 
 /*
 Desired primitives / functionalities:

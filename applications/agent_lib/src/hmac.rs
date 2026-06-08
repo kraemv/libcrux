@@ -46,3 +46,29 @@ impl From<&RandomBytes> for HmacSha256Key{
         Self(bytes.copy_inner())
     }
 }
+
+impl TryFrom<&[u8]> for HmacSha256Key {
+    type Error = crate::Error;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        InnerRndBytes::try_from(value)
+            .map(HmacSha256Key)
+            .map_err(|_| crate::Error::MAC)
+    }
+}
+
+impl TryFrom<&[u8]> for HmacSha256Mac {
+    type Error = crate::Error;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        value.try_into()
+            .map(Self::new)
+            .map_err(|_| Self::Error::MAC)
+    }
+}
+
+impl AsRef<[u8]> for HmacSha256Mac {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}

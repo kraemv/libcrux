@@ -4,7 +4,7 @@ use libcrux_ml_kem::mlkem768;
 use rand::CryptoRng;
 use zerocopy::*;
 
-pub(crate) struct SharedKey([u8; 32]);
+pub struct SharedKey([u8; 32]);
 
 /// An ML-KEM-768 public key (1184 bytes).
 #[derive(
@@ -87,7 +87,7 @@ impl X25519SecretKey {
     pub fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }
-    pub(crate) fn derive(&self, pk: &X25519PublicKey) -> Result<SharedKey, crate::Error> {
+    pub fn derive(&self, pk: &X25519PublicKey) -> Result<SharedKey, crate::Error> {
         curve25519::X25519::derive_ecdh(&pk.0, &self.0).map_err(|_| Error::Derive)
             .map(SharedKey)
     }
@@ -116,6 +116,13 @@ impl TryFrom<&[u8]> for X25519PublicKey {
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         let inner: [u8; 32] = bytes.try_into().map_err(|_| Error::Derive)?;
         Ok(Self(inner))
+    }
+}
+
+impl From<SharedKey> for Vec<u8> {
+
+    fn from(shk: SharedKey) -> Self {
+        shk.0.to_vec()
     }
 }
 
