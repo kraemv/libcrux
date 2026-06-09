@@ -4,9 +4,9 @@ use libcrux_agent::hkdf::PseudorandomKey;
 use libcrux_agent::ID;
 use libcrux_agent::kx::SharedKey;
 use libcrux_hkdf;
-use libcrux_sha2::SHA256_LENGTH;
+use libcrux_sha2::{Sha256, SHA256_LENGTH};
 
-use crate::hash::{Hash, Sha2_256};
+use crate::hash::Hash;
 use crate::{AgentLib, Implementation, NetworkObject, RandomKey};
 use crate::provider::get_agent_by_idx;
 
@@ -60,7 +60,7 @@ pub trait HKDFKey: Send + Sync {
 pub struct Hkdf<const N: usize, Algo: Hash<N>, Impl: Implementation>{marker: PhantomData<(Algo, Impl)>}
 
 pub struct Sha256SaltedHKDF<Impl: Implementation>(Vec<u8>, PhantomData<Impl>);
-pub struct Sha256SecretSaltedHKDF(HKDFKeyID::<SHA256_LENGTH, Sha2_256>);
+pub struct Sha256SecretSaltedHKDF(HKDFKeyID::<SHA256_LENGTH, Sha256>);
 
 pub struct HKDFKeyID<const N: usize, Algo: Hash<N>> {
     id: ID,
@@ -68,8 +68,8 @@ pub struct HKDFKeyID<const N: usize, Algo: Hash<N>> {
     marker: PhantomData<Algo>,
 }
 
-impl RandomnessExtractor for Hkdf<SHA256_LENGTH, Sha2_256, AgentLib> {
-    type Salt = HKDFKeyID<SHA256_LENGTH, Sha2_256>;
+impl RandomnessExtractor for Hkdf<SHA256_LENGTH, Sha256, AgentLib> {
+    type Salt = HKDFKeyID<SHA256_LENGTH, Sha256>;
     type SecretExtractor = Sha256SecretSaltedHKDF;
     type PublicExtractor = Sha256SaltedHKDF<AgentLib>;
 
@@ -112,7 +112,7 @@ impl SaltedRandomnessExtractor for Sha256SaltedHKDF<AgentLib> {
         let agent = get_agent_by_idx(key.agent_idx)
             .ok_or(Error::Internal("No Agent".to_string()))?;
         agent.hkdf_extract_public_salt(key.id, &self.0)
-            .map(|id| HKDFKeyID::<SHA256_LENGTH, Sha2_256>{id, agent_idx: key.agent_idx, marker: PhantomData})
+            .map(|id| HKDFKeyID::<SHA256_LENGTH, Sha256>{id, agent_idx: key.agent_idx, marker: PhantomData})
             .map_err(|_| Error::Extract)
     }
 }
@@ -137,7 +137,7 @@ impl SaltedRandomnessExtractor for Sha256SecretSaltedHKDF {
             .map_err(|_| Error::Extract)
     }
 }
-impl HKDFKey for HKDFKeyID<SHA256_LENGTH, Sha2_256> {
+impl HKDFKey for HKDFKeyID<SHA256_LENGTH, Sha256> {
     const N: usize = SHA256_LENGTH;
     type Okm = RandomKey;
     

@@ -17,6 +17,7 @@ libcrux-hkdf.workspace = true
 libcrux-ml-kem.workspace=true
 libcrux-ml-kem.default-features=true
 libcrux-sha2.workspace=true
+libcrux-traits.workspace=true
 
 der = { git = "https://github.com/kraemv/formats", rev = "c2da52f7", features = ["alloc", "oid"]}
 pkcs8 = { git = "https://github.com/kraemv/formats", rev = "c2da52f7", features = ["pem"]}

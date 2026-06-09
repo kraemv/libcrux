@@ -1,20 +1,18 @@
 use libcrux_sha2;
-
-pub struct Sha2_256;
+use libcrux_traits::Digest;
 
 pub enum HashAlgo {
     Sha2_256,
 }
-pub trait Hash<const N: usize> {
-    fn digest(&self, msg: &[u8]) -> [u8; N];
-
+pub trait Hash<const N: usize>: Digest<N> + Clone + Send + Sync{
+    fn init() -> Self;
+    
     fn scheme() -> HashAlgo;
 }
 
-impl Hash<{libcrux_sha2::SHA256_LENGTH}> for Sha2_256 {
-    fn digest(&self, msg: &[u8]) -> [u8; libcrux_sha2::SHA256_LENGTH]
-    {
-        libcrux_sha2::sha256(msg)
+impl Hash<{libcrux_sha2::SHA256_LENGTH}> for libcrux_sha2::Sha256 {
+    fn init() -> Self {
+        libcrux_sha2::Sha256::new()    
     }
 
     fn scheme() -> HashAlgo {
