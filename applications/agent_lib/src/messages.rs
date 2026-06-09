@@ -1,3 +1,4 @@
+use crate::aead_messages::*;
 use crate::hkdf_messages::*;
 use crate::hmac::{HmacSha256Mac, Sha2_256HMAC};
 use crate::hmac_messages::{HmacRequest, HmacResponse};
@@ -15,6 +16,8 @@ use zerocopy::*;
 #[derive(Clone, Copy, PartialEq, Eq, IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
 #[repr(u8)]
 pub enum MessageKind {
+    ChaCha20Poly1305Decrypt,
+    ChaCha20Poly1305Encrypt,
     EcDsaP256Sign,
     Ed25519Sign,
     Export,
@@ -118,6 +121,17 @@ impl From<ExportResponse> for IPCResponse {
     }
 }
 
+impl From<AeadEncryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>> for IPCRequest {
+    fn from(msg: AeadEncryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>) -> Self {
+        Self::new(MessageKind::ChaCha20Poly1305Encrypt, Vec::<u8>::from(msg))
+    }
+}
+
+impl From<AeadEncryptResponse<'_, ChaCha20Poly1305, CHACHA_TAG_LEN>> for IPCResponse {
+    fn from(msg: AeadEncryptResponse<'_, ChaCha20Poly1305, CHACHA_TAG_LEN>) -> Self {
+        Self::new(MessageKind::ChaCha20Poly1305Encrypt, msg.into())
+    }
+}
 impl From<SignRequest<'_, EcDsaP256SHA256>> for IPCRequest {
     fn from(msg: SignRequest<EcDsaP256SHA256>) -> Self {
         Self::new(MessageKind::EcDsaP256Sign, Vec::<u8>::from(msg))

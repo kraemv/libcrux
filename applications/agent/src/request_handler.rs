@@ -1,5 +1,6 @@
 use crate::keys::*;
 use crate::Error;
+use libcrux_agent::aead_messages::*;
 use libcrux_agent::hkdf_messages::*;
 use libcrux_agent::hmac::Sha2_256HMAC;
 use libcrux_agent::kex_messages::*;
@@ -14,6 +15,10 @@ use zerocopy::*;
 
 pub(crate) fn handle_request(request: &IPCRequest) -> Result<IPCResponse, Error> {
     match request.get_header().get_type() {
+        MessageKind::ChaCha20Poly1305Encrypt => {
+            let request = AeadEncryptRequest::<ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>::try_from(request.get_payload())?;
+            handle_chacha20poly1305_encrypt_request(&request)
+        }
         MessageKind::EcDsaP256Sign => {
             let request = SignRequest::<EcDsaP256SHA256>::try_from(request.get_payload())?;
             handle_ecdsa_p256_sign_request(&request)
@@ -73,6 +78,13 @@ pub(crate) fn handle_request(request: &IPCRequest) -> Result<IPCResponse, Error>
             handle_hmac_sha2_256_authenticate(&request)
         }
     }
+}
+
+pub(crate) fn handle_chacha20poly1305_encrypt_request(
+    request: &AeadEncryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>
+) -> Result<IPCResponse, Error> {
+    chacha20poly1305_encrypt_for_id(request.get_id(), request.get_nonce(), request.get_plaintext(), request.get_aad())
+        .map(|(tag, ciphertext)| request.into_response().into())
 }
 
 pub(crate) fn handle_ecdsa_p256_sign_request(
