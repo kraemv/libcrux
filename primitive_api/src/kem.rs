@@ -3,9 +3,8 @@ use std::marker::PhantomData;
 use crate::provider::{get_agent_and_idx, get_agent_by_idx};
 use crate::hkdf::{HkdfIkm, SharedKeyID};
 
-use crate::NetworkObject;
+use crate::{KeyID, NetworkObject};
 
-use libcrux_agent::ID;
 use libcrux_ml_kem::mlkem768::{self, MlKem768Ciphertext, MlKem768PublicKey};
 
 /// KEM Errors
@@ -58,14 +57,7 @@ pub enum KemScheme {
     // X25519MlKem768,
 }
 
-#[derive(Clone, Debug)]
-pub struct DecapsKeyID<Scheme: Kem> {
-    id: ID,
-    agent_idx: usize,
-    scheme: PhantomData<Scheme>
-}
-
-impl DecapsKey for DecapsKeyID<MlKem768> {
+impl DecapsKey for KeyID<MlKem768> {
     type PublicKey = MlKem768PublicKey;
     type Ciphertext = MlKem768Ciphertext;
     type SharedSecret = SharedKeyID;

@@ -58,6 +58,10 @@ impl<'a, Scheme, const NONCE_LEN: usize, const TAG_LEN: usize> AeadEncryptReques
 }
 
 impl<'a, Scheme, const TAG_LEN: usize> AeadEncryptResponse<'a, Scheme, TAG_LEN> {
+    pub fn new(ciphertext: &'a mut [u8], tag: [u8; TAG_LEN]) -> Self {
+        Self { tag, ciphertext, scheme: PhantomData }
+    }
+    
     pub fn get_ciphertext(&'a self) -> &'a [u8] {
         self.ciphertext
     }

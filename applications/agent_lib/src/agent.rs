@@ -3,7 +3,7 @@ use std::process::Command;
 use zerocopy::TryFromBytes;
 
 use crate::{
-    Error, ID, hkdf_messages::*, hmac::{HmacSha256Mac, Sha2_256HMAC}, hmac_messages::{HmacRequest, HmacResponse}, kex_messages::*, kx::{MlKem768Ciphertext, MlKem768PublicKey, X25519PublicKey}, messages::{
+    Error, ID, aead::ChaCha20Poly1305, aead_messages::{AeadDecryptRequest, AeadDecryptResponse}, hkdf_messages::*, hmac::{HmacSha256Mac, Sha2_256HMAC}, hmac_messages::{HmacRequest, HmacResponse}, kex_messages::*, kx::{MlKem768Ciphertext, MlKem768PublicKey, X25519PublicKey}, messages::{
         ExportRequest, ExportResponse, IPCRequest, IPCResponse, IPCSetupRequest, IPCSetupResponse,
         MessageKind, SetupMessageKind,
     }, signatures::{
@@ -134,6 +134,21 @@ impl Agent {
         }
     }
 
+    // -------------------------------------------------------------------------
+    // ChaCha20Poly1305
+    // -------------------------------------------------------------------------
+
+    pub fn chacha20poly1305_decrypt_for_id<'a>(&self, id: &ID, plaintext: &'a mut [u8], nonce: &[u8; CHACHA_NONCE_LEN], tag: &[u8; CHACHA_TAG_LEN], ciphertext: &[u8], aad: &[u8]) -> Result<&'a mut [u8], Error>{
+        let pre_response = AeadDecryptResponse::<ChaCha20Poly1305>::new()
+        let request = IPCRequest::from(AeadDecryptRequest::<ChaCha20Poly1305>::new(id, ciphertext, nonce, tag, aad, response))
+        let response = self.send_recv(IPCRequest::from(value))
+        KEY_STORE.chacha20poly1305_decrypt_for_id(id, plaintext, nonce, tag, ciphertext, aad)
+    }
+
+    pub fn chacha20poly1305_encrypt_for_id<'a>(id: &ID, ciphertext: &'a mut [u8], nonce: &[u8; CHACHA_NONCE_LEN], plaintext: &[u8], aad: &[u8]) -> Result<(&'a mut [u8], [u8; CHACHA_TAG_LEN]), Error>{
+        let pre_response = AeadEncryptResponse::<ChaCha20Poly1305, {libcrux_chacha20poly1305::TAG_LEN}>
+        KEY_STORE.chacha20poly1305_encrypt_for_id(id, ciphertext, nonce, plaintext, aad)
+    }
     // -------------------------------------------------------------------------
     // Signing
     // -------------------------------------------------------------------------

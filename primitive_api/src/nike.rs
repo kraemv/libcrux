@@ -3,8 +3,8 @@ use std::fmt::Debug;
 
 use crate::provider::{get_agent_and_idx, get_agent_by_idx};
 use crate::hkdf::{HkdfIkm, SharedKeyID};
-use crate::NetworkObject;
-use libcrux_agent::ID;
+use crate::{KeyID, NetworkObject};
+
 use libcrux_agent::kx::{SharedKey, X25519PublicKey, X25519SecretKey};
 use libcrux_curve25519 as curve25519;
 use libcrux_curve25519::ecdh_api::EcdhOwned;
@@ -49,14 +49,7 @@ pub enum NIKEScheme {
     X25519,
 }
 
-#[derive(Clone, Debug)]
-pub struct NIKESecretKeyID<Scheme: Nike> {
-    id: ID,
-    agent_idx: usize,
-    scheme: PhantomData<Scheme>,
-}
-
-impl NIKESecretKey for NIKESecretKeyID<X25519> {
+impl NIKESecretKey for KeyID<X25519> {
     type PublicKey = X25519PublicKey;
     type SharedSecret = SharedKeyID;
 
