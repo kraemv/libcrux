@@ -30,10 +30,10 @@ fn main() {
             Err(IpcError::Disconnected) => break,
             Err(_) => continue,
         };
-        let Ok(new_request) = IPCRequest::try_from(new_request.as_ref()) else {
+        let Ok(mut new_request) = IPCRequest::try_from(new_request.as_ref()) else {
             continue;
         };
-        match request_handler::handle_request(&new_request) {
+        match request_handler::handle_request(&mut new_request) {
             Ok(response) => tx1.send(response.into_bytes().as_ref()).unwrap(),
             Err(_) => continue,
         };

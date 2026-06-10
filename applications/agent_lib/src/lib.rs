@@ -4,6 +4,7 @@ use heapless::Vec;
 #[derive(Clone, Debug, IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
 #[repr(u8)]
 pub enum Error {
+    AEAD,
     Derive,
     DuplicateKey,
     Encoding,

@@ -13,8 +13,12 @@ static EPHEMERAL_KEY_STORE: LazyLock<KeyStore> = LazyLock::new(|| {
     KeyStore::new(&mut RNG.write().unwrap()).expect("Failed to initialize KeyStore")
 });
 
-pub fn chacha20poly1305_encrypt_for_id(id: &ID, nonce: &[u8; CHACHA_NONCE_LEN], plaintext: &[u8], aad: &[u8]) -> Result<([u8; CHACHA_TAG_LEN], &[u8]), Error>{
-    KEY_STORE.chacha20poly1305_encrypt_for_id(id, nonce, plaintext, aad)
+pub fn chacha20poly1305_decrypt_for_id<'a>(id: &ID, plaintext: &'a mut [u8], nonce: &[u8; CHACHA_NONCE_LEN], tag: &[u8; CHACHA_TAG_LEN], ciphertext: &[u8], aad: &[u8]) -> Result<&'a mut [u8], Error>{
+    KEY_STORE.chacha20poly1305_decrypt_for_id(id, plaintext, nonce, tag, ciphertext, aad)
+}
+
+pub fn chacha20poly1305_encrypt_for_id<'a>(id: &ID, ciphertext: &'a mut [u8], nonce: &[u8; CHACHA_NONCE_LEN], plaintext: &[u8], aad: &[u8]) -> Result<(&'a mut [u8], [u8; CHACHA_TAG_LEN]), Error>{
+    KEY_STORE.chacha20poly1305_encrypt_for_id(id, ciphertext, nonce, plaintext, aad)
 }
 
 pub fn ecdsa_p256_sign_for_id(id: &ID, message: &[u8]) -> Result<EcDsaP256Signature<SHA256>, Error> {

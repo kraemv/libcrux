@@ -10,6 +10,7 @@ use hex;
 use std::collections::hash_map::Entry;
 use std::mem;
 use std::vec::Vec as std_vec;
+use libcrux_chacha20poly1305 as chacha20;
 use libcrux_curve25519 as curve25519;
 use libcrux_curve25519::ecdh_api::EcdhOwned;
 use libcrux_ecdsa as ecdsa;
@@ -35,6 +36,7 @@ const SHARED_KEY_LABEL: &[u8; 9] = b"SharedKey";
 const X25519_LABEL: &[u8; 9] = b"X25519Key";
 
 pub(crate) enum SecretKey {
+    ChaCha20Poly1305Key(chacha20::Key),
     EcDsaP256Key(EcDsaP256PrivateKey<SHA256>),
     Ed25519Key(Ed25519PrivateKey),
     MlKem768Key(Arc<mlkem768::MlKem768PrivateKey>),
@@ -76,6 +78,24 @@ impl SecretKey {
             },
             SecretKey::HMACKey(bytes) => {
                 let key_copy = SecretKey::HMACKey(bytes.clone());
+                Some(mem::replace(self, key_copy))
+            },
+            _ => None,
+        }
+    }
+
+    pub(crate) fn set_chacha20poly1305_key(&mut self) -> Option<Self> {
+        match &self {
+            SecretKey::RandomBytes(bytes) => {
+                let bytes: [u8; chacha20::KEY_LEN] = bytes.as_ref().try_into().ok()?;
+                let key = chacha20::Key::from(bytes);
+                let key_copy = SecretKey::ChaCha20Poly1305Key(key);
+                Some(mem::replace(self, key_copy))
+            },
+            SecretKey::ChaCha20Poly1305Key(key) => {
+                let bytes = *key.as_ref();
+                let key = chacha20::Key::from(bytes);
+                let key_copy = SecretKey::ChaCha20Poly1305Key(key);
                 Some(mem::replace(self, key_copy))
             },
             _ => None,
@@ -200,6 +220,43 @@ impl KeyStore {
         }*/
 
         Ok(tag)
+    }
+
+    pub fn chacha20poly1305_decrypt_for_id<'a>(&self, id: &ID, plaintext: &'a mut [u8], nonce: &[u8; chacha20::NONCE_LEN], tag: &[u8; chacha20::TAG_LEN], ciphertext: &[u8], aad: &[u8]) -> Result<&'a mut [u8], Error>{
+        let mut entries = self.entries.write().map_err(|_| Error::AEAD)?;
+        match entries.entry(id.clone()) {
+            Entry::Occupied(mut entry) => {
+                let entry = entry.get_mut();
+                entry.get_mut_key().set_chacha20poly1305_key().ok_or(Error::AEAD)?;
+                match entry.get_key() {
+                    SecretKey::ChaCha20Poly1305Key(key) => {
+                        key.decrypt(plaintext, nonce.into(), aad, ciphertext, tag.into()).map_err(|_| Error::AEAD)?;
+                        Ok(plaintext)
+                    }
+                    _ => Err(Error::AEAD),
+                }
+            }
+            Entry::Vacant(_) => Err(Error::UnknownID),
+        }
+    }
+    
+    pub fn chacha20poly1305_encrypt_for_id<'a>(&self, id: &ID, ciphertext: &'a mut [u8], nonce: &[u8; chacha20::NONCE_LEN], plaintext: &[u8], aad: &[u8]) -> Result<(&'a mut [u8], [u8; chacha20::TAG_LEN]), Error>{
+        let mut entries = self.entries.write().map_err(|_| Error::AEAD)?;
+        match entries.entry(id.clone()) {
+            Entry::Occupied(mut entry) => {
+                let entry = entry.get_mut();
+                entry.get_mut_key().set_chacha20poly1305_key().ok_or(Error::AEAD)?;
+                let mut tag = chacha20::Tag::from([0u8; chacha20::TAG_LEN]);
+                match entry.get_key() {
+                    SecretKey::ChaCha20Poly1305Key(key) => {
+                        key.encrypt(ciphertext, &mut tag, nonce.into(), aad, plaintext).map_err(|_| Error::AEAD)?;
+                        Ok((ciphertext, *tag.as_ref()))
+                    }
+                    _ => Err(Error::AEAD),
+                }
+            }
+            Entry::Vacant(_) => Err(Error::UnknownID),
+        }
     }
 
     pub fn x25519_derive_for_id(&self, id: &ID, pk: &X25519PublicKey) -> Result<ID, Error> {

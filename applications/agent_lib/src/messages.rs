@@ -132,6 +132,19 @@ impl From<AeadEncryptResponse<'_, ChaCha20Poly1305, CHACHA_TAG_LEN>> for IPCResp
         Self::new(MessageKind::ChaCha20Poly1305Encrypt, msg.into())
     }
 }
+
+impl From<AeadDecryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>> for IPCRequest {
+    fn from(msg: AeadDecryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>) -> Self {
+        Self::new(MessageKind::ChaCha20Poly1305Decrypt, Vec::<u8>::from(msg))
+    }
+}
+
+impl From<AeadDecryptResponse<'_, ChaCha20Poly1305>> for IPCResponse {
+    fn from(msg: AeadDecryptResponse<'_, ChaCha20Poly1305>) -> Self {
+        Self::new(MessageKind::ChaCha20Poly1305Decrypt, msg.into())
+    }
+}
+
 impl From<SignRequest<'_, EcDsaP256SHA256>> for IPCRequest {
     fn from(msg: SignRequest<EcDsaP256SHA256>) -> Self {
         Self::new(MessageKind::EcDsaP256Sign, Vec::<u8>::from(msg))

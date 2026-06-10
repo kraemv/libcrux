@@ -13,11 +13,15 @@ use libcrux_agent::signing_messages::*;
 use libcrux_agent::hmac_messages::*;
 use zerocopy::*;
 
-pub(crate) fn handle_request(request: &IPCRequest) -> Result<IPCResponse, Error> {
+pub(crate) fn handle_request(request: &mut IPCRequest) -> Result<IPCResponse, Error> {
     match request.get_header().get_type() {
+        MessageKind::ChaCha20Poly1305Decrypt => {
+            let mut request = AeadDecryptRequest::<ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>::try_from(request.get_mut_payload())?;
+            handle_chacha20poly1305_decrypt_request(&mut request)
+        }
         MessageKind::ChaCha20Poly1305Encrypt => {
-            let request = AeadEncryptRequest::<ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>::try_from(request.get_payload())?;
-            handle_chacha20poly1305_encrypt_request(&request)
+            let mut request = AeadEncryptRequest::<ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>::try_from(request.get_mut_payload())?;
+            handle_chacha20poly1305_encrypt_request(&mut request)
         }
         MessageKind::EcDsaP256Sign => {
             let request = SignRequest::<EcDsaP256SHA256>::try_from(request.get_payload())?;
@@ -80,11 +84,29 @@ pub(crate) fn handle_request(request: &IPCRequest) -> Result<IPCResponse, Error>
     }
 }
 
-pub(crate) fn handle_chacha20poly1305_encrypt_request(
-    request: &AeadEncryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>
+pub(crate) fn handle_chacha20poly1305_decrypt_request(
+    request: &mut AeadDecryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>
 ) -> Result<IPCResponse, Error> {
-    chacha20poly1305_encrypt_for_id(request.get_id(), request.get_nonce(), request.get_plaintext(), request.get_aad())
-        .map(|(tag, ciphertext)| request.into_response().into())
+    let id = &request.id;
+    let nonce = &request.nonce;
+    let tag = &request.tag;
+    let ctxt = request.ciphertext;
+    let aad = request.aad;
+    let plaintext = request.response.get_mut_plaintext();
+    chacha20poly1305_decrypt_for_id(id, plaintext, nonce, tag, ctxt, aad)
+        .map(|plaintext| IPCResponse::from(AeadDecryptResponse::from(plaintext)))
+}
+
+pub(crate) fn handle_chacha20poly1305_encrypt_request(
+    request: &mut AeadEncryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>
+) -> Result<IPCResponse, Error> {
+    let id = &request.id;
+    let nonce = &request.nonce;
+    let ptxt = request.plaintext;
+    let aad = request.aad;
+    let ct = request.response.get_mut_ciphertext();
+    chacha20poly1305_encrypt_for_id(id, ct, nonce, ptxt, aad)
+        .map(|(ciphertext, tag)| IPCResponse::from(AeadEncryptResponse::from((ciphertext, tag))))
 }
 
 pub(crate) fn handle_ecdsa_p256_sign_request(

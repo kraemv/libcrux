@@ -10,6 +10,7 @@ readme.workspace = true
 
 [dependencies]
 
+libcrux-chacha20poly1305.workspace = true
 libcrux-curve25519.workspace = true
 libcrux-ecdsa.workspace = true
 libcrux-ed25519.workspace = true
