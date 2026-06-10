@@ -48,6 +48,7 @@ impl AsRef<[u8; 32]> for ID {
     }
 }
 
+pub mod aead;
 pub mod aead_messages;
 pub mod agent;
 pub mod ipc;
