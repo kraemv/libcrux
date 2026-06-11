@@ -10,6 +10,7 @@ pub enum Error {
     Derive,
     DuplicateKey,
     Encoding,
+    Expand,
     IO,
     HKDF,
     KeyExchange,
@@ -19,6 +20,7 @@ pub enum Error {
     NoAgent,
     PublicKey,
     Signing,
+    Sync,
     UnknownID,
     Unsupported,
 }

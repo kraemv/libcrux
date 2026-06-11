@@ -7,6 +7,7 @@ use crate::ipc::IpcMessage;
 use crate::kex_messages::*;
 use crate::signatures::{EcDsaP256PublicKey, EcDsaP256SHA256, Ed25519, Ed25519PublicKey, SHA256};
 use crate::signing_messages::*;
+use crate::Error;
 use zerocopy::*;
 
 // ---------------------------------------------------------------------------
@@ -20,6 +21,7 @@ pub enum MessageKind {
     ChaCha20Poly1305Encrypt,
     EcDsaP256Sign,
     Ed25519Sign,
+    Error,
     Export,
     HkdfExtractPublic,
     HkdfExtractSecret,
@@ -265,6 +267,14 @@ impl From<&SetupResponse<Ed25519PublicKey>> for IPCSetupResponse {
 impl From<&InitResult> for IPCSetupResponse {
     fn from(msg: &InitResult) -> Self {
         Self::new(SetupMessageKind::AgentInit, msg.as_bytes().to_vec())
+    }
+}
+
+// Errors
+
+impl From<Error> for IPCResponse {
+    fn from(msg: Error) -> Self {
+        Self::new(MessageKind::Error, msg.as_bytes().to_vec())
     }
 }
 

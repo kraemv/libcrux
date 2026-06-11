@@ -33,9 +33,7 @@ fn main() {
         let Ok(mut new_request) = IPCRequest::try_from(new_request.as_ref()) else {
             continue;
         };
-        match request_handler::handle_request(&mut new_request) {
-            Ok(response) => tx1.send(response.into_bytes().as_ref()).unwrap(),
-            Err(_) => continue,
-        };
+        let response = request_handler::handle_request(&mut new_request).unwrap_or_else(|err| err.into());
+        tx1.send(response.into_bytes().as_ref()).unwrap();
     }
 }

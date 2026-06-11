@@ -71,10 +71,10 @@ impl Agent {
     }
 
     fn expect_kind(response: &IPCResponse, expected: MessageKind) -> Result<&[u8], Error> {
-        if response.get_header().get_type() == expected {
-            Ok(response.get_payload())
-        } else {
-            Err(Error::MalformedResponse)
+        match response.get_header().get_type() {
+            MessageKind::Error => Err(Error::try_read_from_bytes(response.get_payload()).map_err(|_| Error::MalformedResponse)?),
+            kind if kind == expected => Ok(response.get_payload()),
+            _ => Err(Error::MalformedResponse)
         }
     }
 

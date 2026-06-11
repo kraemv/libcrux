@@ -30,6 +30,10 @@ pub(crate) fn handle_request(request: &mut IPCRequest) -> Result<IPCResponse, Er
             handle_ed25519_sign_request(&request)
         }
 
+        MessageKind::Error => {
+            Err(Error::IO)
+        }
+
         MessageKind::MlKem768Decaps => {
             let request = MlKem768DecapsRequest::try_ref_from_bytes(request.get_payload())
                 .map_err(|_| Error::MalformedRequest)?;

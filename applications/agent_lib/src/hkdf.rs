@@ -6,6 +6,7 @@ use libcrux_hkdf as hkdf;
 
 pub(crate) const SHA2_256_LEN: usize = hkdf::Algorithm::hash_len(hkdf::Algorithm::Sha256);
 
+#[derive(Clone)]
 pub struct PseudorandomKey ([u8; 32]);
 #[derive(Clone)]
 pub struct RandomBytes (InnerRndBytes);
