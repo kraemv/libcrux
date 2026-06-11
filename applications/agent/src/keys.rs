@@ -13,20 +13,20 @@ static EPHEMERAL_KEY_STORE: LazyLock<KeyStore> = LazyLock::new(|| {
     KeyStore::new(&mut RNG.write().unwrap()).expect("Failed to initialize KeyStore")
 });
 
-pub fn chacha20poly1305_decrypt_for_id<'a>(id: &ID, plaintext: &'a mut [u8], nonce: &[u8; CHACHA_NONCE_LEN], tag: &[u8; CHACHA_TAG_LEN], ciphertext: &[u8], aad: &[u8]) -> Result<&'a [u8], Error>{
-    KEY_STORE.chacha20poly1305_decrypt_for_id(id, plaintext, nonce, tag, ciphertext, aad)
-}
-
-pub fn chacha20poly1305_encrypt_for_id<'a>(id: &ID, ciphertext: &'a mut [u8], nonce: &[u8; CHACHA_NONCE_LEN], plaintext: &[u8], aad: &[u8]) -> Result<(&'a [u8], [u8; CHACHA_TAG_LEN]), Error>{
-    KEY_STORE.chacha20poly1305_encrypt_for_id(id, ciphertext, nonce, plaintext, aad)
-}
-
 pub fn ecdsa_p256_sign_for_id(id: &ID, message: &[u8]) -> Result<EcDsaP256Signature<SHA256>, Error> {
     KEY_STORE.ecdsa_p256_sign_for_id(id, message, &mut RNG.write().unwrap())
 }
 
 pub fn ed25519_sign_for_id(id: &ID, message: &[u8]) -> Result<Ed25519Signature, Error> {
     KEY_STORE.ed25519_sign_for_id(id, message)
+}
+
+pub fn chacha20poly1305_decrypt_for_id<'a>(id: &ID, plaintext: &'a mut [u8], nonce: &[u8; CHACHA_NONCE_LEN], tag: &[u8; CHACHA_TAG_LEN], ciphertext: &[u8], aad: &[u8]) -> Result<&'a [u8], Error>{
+    EPHEMERAL_KEY_STORE.chacha20poly1305_decrypt_for_id(id, plaintext, nonce, tag, ciphertext, aad)
+}
+
+pub fn chacha20poly1305_encrypt_for_id<'a>(id: &ID, ciphertext: &'a mut [u8], nonce: &[u8; CHACHA_NONCE_LEN], plaintext: &[u8], aad: &[u8]) -> Result<(&'a [u8], [u8; CHACHA_TAG_LEN]), Error>{
+    EPHEMERAL_KEY_STORE.chacha20poly1305_encrypt_for_id(id, ciphertext, nonce, plaintext, aad)
 }
 
 pub fn x25519_generate_key_id() -> Result<(ID, X25519PublicKey), Error> {
@@ -51,8 +51,8 @@ pub fn mlkem_768_encaps_for_id(
     EPHEMERAL_KEY_STORE.mlkem_768_encaps_for_id(pk, &mut RNG.write().unwrap())
 }
 
-pub fn export_key_material(id: &ID) -> Result<Vec<u8>, Error> {
-    EPHEMERAL_KEY_STORE.export_key_material(id)
+pub fn export_nonce(id: &ID) -> Result<[u8; 12], Error> {
+    EPHEMERAL_KEY_STORE.export_nonce(id)
 }
 
 pub fn hkdf_extract_public_salt(id: &ID, salt: &[u8]) -> Result<ID, Error> {

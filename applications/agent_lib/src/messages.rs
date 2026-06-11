@@ -7,7 +7,6 @@ use crate::ipc::IpcMessage;
 use crate::kex_messages::*;
 use crate::signatures::{EcDsaP256PublicKey, EcDsaP256SHA256, Ed25519, Ed25519PublicKey, SHA256};
 use crate::signing_messages::*;
-use crate::ID;
 use zerocopy::*;
 
 // ---------------------------------------------------------------------------
@@ -51,39 +50,6 @@ pub type IPCSetupRequest = IpcMessage<SetupMessageKind>;
 pub type IPCSetupResponse = IpcMessage<SetupMessageKind>;
 
 // ---------------------------------------------------------------------------
-// Export request / response (defined here because they have no own module)
-// ---------------------------------------------------------------------------
-
-#[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout)]
-pub struct ExportRequest {
-    id: ID,
-}
-
-impl ExportRequest {
-    pub fn new(id: ID) -> Self {
-        Self { id }
-    }
-
-    pub fn get_id(&self) -> &ID {
-        &self.id
-    }
-}
-
-pub struct ExportResponse {
-    shk: Vec<u8>,
-}
-
-impl ExportResponse {
-    pub fn new(shk: Vec<u8>) -> Self {
-        Self { shk }
-    }
-
-    pub fn get_shk(&self) -> &[u8] {
-        &self.shk
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Constructors for zero-payload (trigger-only) messages
 // ---------------------------------------------------------------------------
 
@@ -110,14 +76,14 @@ impl IpcMessage<SetupMessageKind> {
 // serialization detail lives in the domain type itself.
 // ---------------------------------------------------------------------------
 
-impl From<ExportRequest> for IPCRequest {
-    fn from(msg: ExportRequest) -> Self {
+impl From<ExportNonceRequest> for IPCRequest {
+    fn from(msg: ExportNonceRequest) -> Self {
         Self::new(MessageKind::Export, msg.get_id().as_ref().to_vec())
     }
 }
 
-impl From<ExportResponse> for IPCResponse {
-    fn from(msg: ExportResponse) -> Self {
+impl From<ExportNonceResponse> for IPCResponse {
+    fn from(msg: ExportNonceResponse) -> Self {
         Self::new(MessageKind::Export, msg.get_shk().to_vec())
     }
 }

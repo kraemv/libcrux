@@ -1,8 +1,7 @@
-use std::marker::PhantomData;
 use std::fmt::Debug;
 
 use crate::provider::{get_agent_and_idx, get_agent_by_idx};
-use crate::hkdf::{HkdfIkm, SharedKeyID};
+use crate::hkdf::HkdfIkm;
 use crate::{KeyID, NetworkObject};
 
 use libcrux_agent::kx::{SharedKey, X25519PublicKey, X25519SecretKey};
@@ -32,16 +31,14 @@ impl Nike for X25519 {}
 
 pub trait NIKESecretKey: Send + Sync + Sized {
     type PublicKey: Debug + NetworkObject;
-    type SharedSecret: HkdfIkm + Into<Vec<u8>>;
+    type SharedSecret: HkdfIkm + NetworkObject;
+    const SCHEME: NIKEScheme;
 
     // Generate a private-public key pair
     fn keygen() -> Result<(Self, Self::PublicKey), Error>;
 
     // Derive a shared secret
     fn derive(self, pk: Self::PublicKey) -> Result<Self::SharedSecret, Error>;
-
-    // Get the scheme this key is for
-    fn scheme(&self) -> NIKEScheme;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -51,7 +48,8 @@ pub enum NIKEScheme {
 
 impl NIKESecretKey for KeyID<X25519> {
     type PublicKey = X25519PublicKey;
-    type SharedSecret = SharedKeyID;
+    type SharedSecret = KeyID<SharedKey>;
+    const SCHEME: NIKEScheme = NIKEScheme::X25519;
 
     fn keygen() -> Result<(Self, Self::PublicKey), Error> {
         let (agent, agent_idx) =
@@ -60,34 +58,27 @@ impl NIKESecretKey for KeyID<X25519> {
             .x25519_generate_key_id()
             .map(|(id, pk)| {
                 (
-                    Self {
-                        id,
-                        agent_idx,
-                        scheme: PhantomData,
-                    },
+                    Self::new(id, agent_idx),
                     pk,
                 )
             })
             .map_err(|_| Error::KeyGen)
     }
 
-    fn derive(self, pk: Self::PublicKey) -> Result<SharedKeyID, Error> {
-        let agent = get_agent_by_idx(self.agent_idx)
+    fn derive(self, pk: Self::PublicKey) -> Result<KeyID<SharedKey>, Error> {
+        let agent = get_agent_by_idx(self.get_idx())
             .ok_or_else(|| Error::Internal("No agent available".into()))?;
         let id = agent
-                .x25519_derive_for_key_id(self.id, pk)
+                .x25519_derive_for_key_id(self.get_id().clone(), pk)
                 .map_err(|_| Error::Derive)?;
-        Ok(SharedKeyID::new(id, self.agent_idx))
-    }
-
-    fn scheme(&self) -> NIKEScheme {
-        NIKEScheme::X25519
+        Ok(KeyID::<SharedKey>::new(id, self.get_idx()))
     }
 }
 
 impl NIKESecretKey for X25519SecretKey {
     type PublicKey = X25519PublicKey;
     type SharedSecret = SharedKey;
+    const SCHEME: NIKEScheme = NIKEScheme::X25519;
 
     fn keygen() -> Result<(Self, Self::PublicKey), Error> {
         let mut rng = ChaChaRng::from_os_rng();
@@ -104,9 +95,6 @@ impl NIKESecretKey for X25519SecretKey {
     fn derive(self, pk: Self::PublicKey) -> Result<Self::SharedSecret, Error> {
         X25519SecretKey::derive(&self, &pk).map_err(|_| Error::Derive)
     }
-
-    fn scheme(&self) -> NIKEScheme {
-        NIKEScheme::X25519
-    }
 }
 impl NetworkObject for X25519PublicKey{}
+impl NetworkObject for SharedKey{}

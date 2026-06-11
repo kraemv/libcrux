@@ -4,6 +4,39 @@ use crate::{Error, ID};
 use zerocopy::*;
 
 // ---------------------------------------------------------------------------
+// Export Nonce request / response
+// ---------------------------------------------------------------------------
+
+#[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout)]
+pub struct ExportNonceRequest {
+    id: ID,
+}
+
+impl ExportNonceRequest {
+    pub fn new(id: ID) -> Self {
+        Self { id }
+    }
+
+    pub fn get_id(&self) -> &ID {
+        &self.id
+    }
+}
+
+pub struct ExportNonceResponse {
+    shk: [u8; 12],
+}
+
+impl ExportNonceResponse {
+    pub fn new(shk: [u8; 12]) -> Self {
+        Self { shk }
+    }
+
+    pub fn get_shk(&self) -> &[u8; 12] {
+        &self.shk
+    }
+}
+
+// ---------------------------------------------------------------------------
 // AEAD
 // ---------------------------------------------------------------------------
 

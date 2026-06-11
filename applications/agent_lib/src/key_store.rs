@@ -9,7 +9,6 @@ use base64ct::{Base64, Encoding};
 use hex;
 use std::collections::hash_map::Entry;
 use std::mem;
-use std::vec::Vec as std_vec;
 use libcrux_chacha20poly1305 as chacha20;
 use libcrux_curve25519 as curve25519;
 use libcrux_curve25519::ecdh_api::EcdhOwned;
@@ -307,10 +306,13 @@ impl KeyStore {
         Ok((id, ct))
     }
 
-    pub fn export_key_material(&self, id: &ID) -> Result<std_vec<u8>, Error> {
-        let entries = self.entries.read().map_err(|_| Error::Derive)?;
-        match entries.get(id).ok_or(Error::UnknownID)?.get_key() {
-            SecretKey::RandomBytes(key) => Ok(key.into_vec()),
+    pub fn export_nonce(&self, id: &ID) -> Result<[u8; 12], Error> {
+        let entry = {
+                let mut entries = self.entries.write().map_err(|_| Error::HKDF)?;
+                entries.remove(id).ok_or(Error::UnknownID)?
+        };
+        match entry.get_key() {
+            SecretKey::RandomBytes(bytes) => Ok(bytes.as_ref().try_into().map_err(|_| Error::HKDF)?),
             _ => Err(Error::Derive),
         }
     }

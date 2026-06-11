@@ -5,11 +5,8 @@ use libcrux_agent::aead_messages::*;
 use libcrux_agent::hkdf_messages::*;
 use libcrux_agent::hmac::Sha2_256HMAC;
 use libcrux_agent::kex_messages::*;
-use libcrux_agent::messages::ExportRequest;
-use libcrux_agent::messages::ExportResponse;
 use libcrux_agent::messages::{IPCRequest, IPCResponse, MessageKind};
-use libcrux_agent::signatures::EcDsaP256SHA256;
-use libcrux_agent::signatures::Ed25519;
+use libcrux_agent::signatures::{EcDsaP256SHA256, Ed25519};
 use libcrux_agent::signing_messages::*;
 use libcrux_agent::hmac_messages::*;
 use zerocopy::*;
@@ -56,9 +53,9 @@ pub(crate) fn handle_request(request: &mut IPCRequest) -> Result<IPCResponse, Er
         MessageKind::X25519KeyGen => handle_x25519_key_gen(),
 
         MessageKind::Export => {
-            let request = ExportRequest::try_ref_from_bytes(request.get_payload())
+            let request = ExportNonceRequest::try_ref_from_bytes(request.get_payload())
                 .map_err(|_| Error::MalformedRequest)?;
-            let response = ExportResponse::new(export_key_material(request.get_id())?);
+            let response = ExportNonceResponse::new(export_nonce(request.get_id())?);
             Ok(IPCResponse::from(response))
         }
 

@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use zerocopy::*;
 use heapless::Vec;
 
@@ -24,7 +26,7 @@ pub enum Error {
 pub(crate) const ID_SIZE: usize = 32;
 pub(crate) type InnerRndBytes = Vec<u8, 64>;
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned)]
 #[repr(C)]
 pub struct ID([u8; ID_SIZE]); 
 
@@ -45,6 +47,68 @@ impl From<[u8; 32]> for ID {
 impl AsRef<[u8; 32]> for ID {
     fn as_ref(&self) -> &[u8; 32] {
         &self.0
+    }
+}
+
+pub enum ConversionError {
+    MalformedID,
+    NoIndex,
+}
+
+const USIZE_SIZE: usize = size_of::<usize>();
+const KEY_ID_SIZE: usize = ID_SIZE + USIZE_SIZE;
+
+#[derive(Debug, IntoBytes, FromBytes, Immutable, KnownLayout)]
+#[repr(C)]
+pub struct KeyID<Scheme> {
+    id: ID,
+    agent_idx: Usize<BigEndian>,
+    scheme: PhantomData<Scheme>
+}
+
+impl<Scheme> KeyID<Scheme> {
+    pub fn new(id: ID, agent_idx: usize) -> Self {
+        Self { id, agent_idx: Usize::<BigEndian>::from_bytes(agent_idx.to_be_bytes()), scheme: PhantomData }
+    }
+
+    pub fn get_idx(&self) -> usize {
+        self.agent_idx.get()
+    }
+
+    pub fn get_id(&self) -> &ID {
+        &self.id
+    }
+}
+
+impl<Scheme> TryFrom<&[u8]> for KeyID<Scheme> {
+    type Error = ConversionError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        Self::try_read_from_bytes(value).map_err(|_| ConversionError::MalformedID)
+    }
+}
+
+impl<Scheme> From<[u8; KEY_ID_SIZE]> for KeyID<Scheme> {
+    fn from(value: [u8; KEY_ID_SIZE]) -> Self {
+        let id= value.first_chunk::<ID_SIZE>().unwrap();
+        let id = ID::from(*id);
+        let agent_idx = Usize::<BigEndian>::from_bytes(value[32..].try_into().unwrap());
+        KeyID::<Scheme> { id, agent_idx, scheme: PhantomData }
+    }
+}
+
+impl<Scheme> From<KeyID<Scheme>> for [u8; KEY_ID_SIZE] {
+    fn from(value: KeyID<Scheme>) -> Self {
+        let mut out = [0u8; KEY_ID_SIZE];
+        out[..32].copy_from_slice(value.id.as_ref());
+        out[32..].copy_from_slice(value.agent_idx.as_bytes());
+        out
+    }
+}
+
+impl <Schme> AsRef<[u8]> for KeyID<Schme> {
+    fn as_ref(&self) -> &[u8] {
+        self.as_bytes()
     }
 }
 

@@ -31,9 +31,9 @@ impl AuthenticationKey for KeyID<Sha2_256HMAC> {
     type Tag = HmacSha256Mac;
 
     fn authenticate(&self, msg: &[u8]) -> Result<Self::Tag, Error> {
-        let agent = get_agent_by_idx(self.agent_idx).ok_or_else(|| Error::Internal("No agent available".into()))?;
+        let agent = get_agent_by_idx(self.get_idx()).ok_or_else(|| Error::Internal("No agent available".into()))?;
         agent
-            .hmac_sha2_256_authenticate(self.id.clone(), msg)
+            .hmac_sha2_256_authenticate(self.get_id().clone(), msg)
             .map_err(|_| Error::Internal("Agent signing failed".into()))
     }
 

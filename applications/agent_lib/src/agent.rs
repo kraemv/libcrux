@@ -280,11 +280,11 @@ impl Agent {
         Ok(HmacSha256Mac::from(r))
     }
 
-    pub fn export_key(&self, id: ID) -> Result<Vec<u8>, Error> {
-        let response = self.send_recv(IPCRequest::from(ExportRequest::new(id)))?;
+    pub fn export_nonce(&self, id: ID) -> Result<Vec<u8>, Error> {
+        let response = self.send_recv(IPCRequest::from(ExportNonceRequest::new(id)))?;
         let payload = Self::expect_kind(&response, MessageKind::Export)?;
-        let r =
-            ExportResponse::new(payload.to_vec());
+        let r = ExportNonceResponse::new(payload.try_into().map_err(|_| Error::HKDF)?);
+
         Ok(r.get_shk().to_vec())
     }
 }

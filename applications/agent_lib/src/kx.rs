@@ -119,10 +119,18 @@ impl TryFrom<&[u8]> for X25519PublicKey {
     }
 }
 
-impl From<SharedKey> for Vec<u8> {
+impl TryFrom<&[u8]> for SharedKey {
+    type Error = crate::Error;
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        let inner: [u8; 32] = bytes.try_into().map_err(|_| Error::Derive)?;
+        Ok(Self(inner))
+    }
+}
 
-    fn from(shk: SharedKey) -> Self {
-        shk.0.to_vec()
+impl AsRef<[u8]> for SharedKey {
+
+    fn as_ref(&self) -> &[u8] {
+        &self.0
     }
 }
 
