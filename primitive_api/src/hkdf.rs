@@ -7,7 +7,7 @@ use libcrux_hkdf;
 use libcrux_sha2::{Sha256, SHA256_LENGTH};
 
 use crate::hash::Hash;
-use crate::{AgentLib, Implementation, KeyID, NetworkObject, RandomKey};
+use crate::{AgentLib, Implementation, KeyID, Lib, NetworkObject, RandomKey};
 use crate::provider::get_agent_by_idx;
 
 /// HKDF Errors
@@ -21,8 +21,9 @@ pub enum Error {
 pub trait SaltValue {}
 pub trait HkdfIkm {}
 
-impl<const N: usize, Algo: Hash<N>> SaltValue for HKDFKeyID<N, Algo> {}
-impl SaltValue for Option<Vec<u8>> {}
+impl SaltValue for KeyID<RandomKey> {}
+impl SaltValue for Vec<u8> {}
+
 impl HkdfIkm for KeyID<SharedKey>{}
 impl HkdfIkm for SharedKey {}
 
@@ -58,7 +59,7 @@ pub trait HKDFKey: Send + Sync {
 pub struct Hkdf<const N: usize, Algo: Hash<N>, Impl: Implementation>(PhantomData<(Algo, Impl)>);
 
 pub struct Sha256SaltedHKDF<Impl: Implementation>(Vec<u8>, PhantomData<Impl>);
-pub struct Sha256SecretSaltedHKDF(HKDFKeyID::<SHA256_LENGTH, Sha256>);
+pub struct Sha256SecretSaltedHKDF(KeyID<RandomKey>);
 
 pub struct HKDFKeyID<const N: usize, Algo: Hash<N>> {
     id: ID,
@@ -66,8 +67,21 @@ pub struct HKDFKeyID<const N: usize, Algo: Hash<N>> {
     marker: PhantomData<Algo>,
 }
 
+impl<const N: usize, Algo: Hash<N>, Impl: Implementation> Hkdf<N, Algo, Impl> 
+{
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }    
+}
+
+impl<const N: usize, Algo: Hash<N>, Impl: Implementation> Default for Hkdf<N, Algo, Impl> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RandomnessExtractor for Hkdf<SHA256_LENGTH, Sha256, AgentLib> {
-    type Salt = HKDFKeyID<SHA256_LENGTH, Sha256>;
+    type Salt = KeyID<RandomKey>;
     type SecretExtractor = Sha256SecretSaltedHKDF;
     type PublicExtractor = Sha256SaltedHKDF<AgentLib>;
 
@@ -82,16 +96,19 @@ impl RandomnessExtractor for Hkdf<SHA256_LENGTH, Sha256, AgentLib> {
     }
 }
 
-impl<const N: usize, Algo: Hash<N>, Impl: Implementation> Hkdf<N, Algo, Impl> 
-{
-    pub const fn new() -> Self {
-        Self(PhantomData)
-    }    
-}
+impl RandomnessExtractor for Hkdf<SHA256_LENGTH, Sha256, Lib> {
+    type Salt = Vec<u8>;
+    type SecretExtractor = Sha256SaltedHKDF<Lib>;
+    type PublicExtractor = Sha256SaltedHKDF<Lib>;
 
-impl<const N: usize, Algo: Hash<N>, Impl: Implementation> Default for Hkdf<N, Algo, Impl> {
-    fn default() -> Self {
-        Self::new()
+    fn with_salt (&self, salt: Option<&[u8]>) ->  Self::PublicExtractor {
+        let salt = salt.unwrap_or(&SHA2_256_SALT);
+        Sha256SaltedHKDF::<Lib>(salt.to_vec(), PhantomData)
+    }
+
+    fn with_secret_salt(&self, salt: Self::Salt) -> Self::SecretExtractor {
+        Sha256SaltedHKDF::<Lib>(salt, PhantomData)
+        
     }
 }
 
@@ -116,23 +133,42 @@ impl SaltedRandomnessExtractor for Sha256SaltedHKDF<AgentLib> {
     }
 }
 
+impl SaltedRandomnessExtractor for Sha256SaltedHKDF<Lib> {
+    type Key = SharedKey;
+    type Prk = PseudorandomKey;
+
+    fn extract_without_key(self) -> Result<impl HKDFKey, Error> {
+        let mut prk = [0u8; 32];
+        let ikm = [0u8; SHA256_LENGTH];
+        libcrux_hkdf::sha2_256::extract(&mut prk, &self.0, &ikm)
+            .map(|()| PseudorandomKey::new(prk))
+            .map_err(|_| Error::Extract)
+    }
+
+    fn extract_with_key(self, key: Self::Key) -> Result<Self::Prk, Error> {
+        let mut prk = [0u8; 32];
+        libcrux_hkdf::sha2_256::extract(&mut prk, &self.0, key.as_ref())
+            .map(|()| PseudorandomKey::new(prk))
+            .map_err(|_| Error::Extract)
+    }
+}
+
 impl SaltedRandomnessExtractor for Sha256SecretSaltedHKDF {
     type Key = KeyID<SharedKey>;
     type Prk = HKDFKeyID<SHA256_LENGTH, Sha256>;
 
     fn extract_without_key(self) -> Result<impl HKDFKey, Error> {
-        let (salt_id, salt_idx) = (&self.0.id, self.0.agent_idx);
-        let agent = get_agent_by_idx(salt_idx)
+        let agent = get_agent_by_idx(self.0.get_idx())
             .ok_or(Error::Internal("No Agent".to_string()))?;
-        agent.hkdf_extract_secret_salt(None, salt_id.clone())
-            .map(|id| HKDFKeyID{id, agent_idx: salt_idx, marker: PhantomData})
+        agent.hkdf_extract_secret_salt(None, self.0.get_id().clone())
+            .map(|id| HKDFKeyID{id, agent_idx: self.0.get_idx(), marker: PhantomData})
             .map_err(|_| Error::Extract)
     }
 
     fn extract_with_key(self, key: Self::Key) -> Result<Self::Prk, Error> {
         let agent = get_agent_by_idx(key.get_idx())
             .ok_or(Error::Internal("No Agent".to_string()))?;
-        agent.hkdf_extract_secret_salt(Some(key.get_id().clone()), self.0.id.clone())
+        agent.hkdf_extract_secret_salt(Some(key.get_id().clone()), self.0.get_id().clone())
             .map(|id| HKDFKeyID{id, agent_idx: key.get_idx(), marker: PhantomData})
             .map_err(|_| Error::Extract)
     }
@@ -185,16 +221,5 @@ where
         let id = ID::try_from(id).map_err(|_| Error::Internal("Malformed ID".to_string()))?;
         let agent_idx = usize::from_be_bytes(idx.try_into().map_err(|_| Error::Internal("Malformed ID".to_string()))?);
         Ok(HKDFKeyID { id, agent_idx, marker: PhantomData })
-    }
-}
-
-impl<const N: usize, Algo> From<HKDFKeyID<N, Algo>> for Vec<u8> where
-    Algo: Hash<N>,
-{
-
-    fn from(key: HKDFKeyID<N, Algo>) -> Self {
-        let mut id_bytes = key.id.as_ref().to_vec();
-        id_bytes.extend_from_slice(&key.agent_idx.to_be_bytes());
-        id_bytes
     }
 }

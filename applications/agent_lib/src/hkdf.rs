@@ -58,6 +58,16 @@ impl AsRef<[u8]> for RandomBytes {
     }
 }
 
+impl TryFrom<&[u8]> for PseudorandomKey {
+    type Error = Error;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        bytes.try_into()
+            .map(Self)
+            .map_err(|_| Error::HKDF)
+    }
+}
+
 impl TryFrom<&[u8]> for RandomBytes {
     type Error = Error;
 

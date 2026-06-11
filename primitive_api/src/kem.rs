@@ -40,12 +40,10 @@ pub trait DecapsKey: Send + Sync + Sized {
 pub trait EncapsKey: Send + Sync + AsRef<[u8]> + for<'a> TryFrom<&'a [u8]> {
     type Ciphertext: NetworkObject;
     type SharedSecret: HkdfIkm + NetworkObject;
+    const SCHEME: KemScheme;
 
     // Encapsulate a key and get the encapsulated key
     fn encaps(&self) -> Result<(Self::SharedSecret, Self::Ciphertext), Error>;
-
-    // Get the scheme this key is for
-    fn scheme(&self) -> KemScheme;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -87,6 +85,7 @@ impl DecapsKey for KeyID<MlKem768> {
 impl EncapsKey for MlKem768PublicKey {
     type Ciphertext = MlKem768Ciphertext;
     type SharedSecret = KeyID<SharedKey>;
+    const SCHEME: KemScheme = KemScheme::MlKem768;
 
     fn encaps(&self) -> Result<(KeyID::<SharedKey>, MlKem768Ciphertext), Error> {
         let (agent, agent_idx) = get_agent_and_idx().ok_or_else(|| Error::Internal("No agent available".into()))?;
@@ -94,10 +93,6 @@ impl EncapsKey for MlKem768PublicKey {
             .mlkem_768_encaps_for_id(self)
             .map_err(|_| Error::Encaps)?;
         Ok((KeyID::<SharedKey>::new(id, agent_idx), ct))
-    }
-
-    fn scheme(&self) -> KemScheme {
-        KemScheme::MlKem768
     }
 }
 

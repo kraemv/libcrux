@@ -4,6 +4,8 @@ use crate::{KeyID, NetworkObject};
 use crate::provider::get_agent_by_idx;
 use libcrux_agent::aead::{AeadNonce, AeadTag};
 pub use libcrux_agent::aead::ChaCha20Poly1305;
+
+#[derive(Debug)]
 pub enum Error {
     Internal(String),
     Decrypt,

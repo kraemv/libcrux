@@ -98,6 +98,7 @@ impl NetworkObject for signatures::Ed25519Signature{ }
 pub trait SigningKey<const N: usize>: Send + Sync + Sized + for<'a> TryFrom<PrivatePkcs8KeyDer<'a>>{
     type PublicKey: VerificationKey + NetworkObject;
     type Signature: NetworkObject;
+    const SCHEME: SignatureScheme;
 
     fn keygen() -> Result<(Self, Self::PublicKey), Error> {
         todo!()
@@ -108,8 +109,6 @@ pub trait SigningKey<const N: usize>: Send + Sync + Sized + for<'a> TryFrom<Priv
 
     // Get the public key belonging to this Signing Key
     fn to_public(&self) -> &Self::PublicKey;
-
-    fn scheme(&self) -> SignatureScheme;
 }
 
 // A public key to verify a signature
@@ -119,10 +118,6 @@ pub trait VerificationKey: NetworkObject{
 
     // Check if the signature is valid for the given payload and key
     fn verify(&self, payload: &[u8], signature: Self::Signature) -> Result<(), Error>;
-
-    fn scheme(&self) -> SignatureScheme{
-        Self::SCHEME
-    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -163,6 +158,7 @@ impl SigningKeyID<Ed25519, Ed25519PublicKey> {
 impl SigningKey<64> for SigningKeyID<Ed25519, Ed25519PublicKey> {
     type PublicKey = Ed25519PublicKey;
     type Signature = signatures::Ed25519Signature;
+    const SCHEME: SignatureScheme = SignatureScheme::Ed25519;
 
     fn sign(&self, payload: &[u8]) -> Result<Self::Signature, Error> {
         let agent = get_agent().ok_or_else(|| Error::InternalError("No agent available".into()))?;
@@ -173,10 +169,6 @@ impl SigningKey<64> for SigningKeyID<Ed25519, Ed25519PublicKey> {
 
     fn to_public(&self) -> &Self::PublicKey {
         &self.public_key
-    }
-
-    fn scheme(&self) -> SignatureScheme {
-        SignatureScheme::Ed25519
     }
 }
 
@@ -209,6 +201,7 @@ impl TryFrom<PrivatePkcs8KeyDer<'_>> for SigningKeyID<Ed25519, Ed25519PublicKey>
 impl SigningKey<64> for SigningKeyID<EcDsaP256, EcDsaP256PublicKey::<SHA256>> {
     type PublicKey = EcDsaP256PublicKey::<SHA256>;
     type Signature = signatures::EcDsaP256Signature::<SHA256>;
+    const SCHEME: SignatureScheme = SignatureScheme::EcDsaP256(DigestAlgorithm::Sha256);
 
     fn sign(&self, payload: &[u8]) -> Result<Self::Signature, Error> {
         let agent = get_agent().ok_or_else(|| Error::InternalError("No agent available".into()))?;
@@ -219,10 +212,6 @@ impl SigningKey<64> for SigningKeyID<EcDsaP256, EcDsaP256PublicKey::<SHA256>> {
 
     fn to_public(&self) -> &Self::PublicKey {
         &self.public_key
-    }
-
-    fn scheme(&self) -> SignatureScheme {
-        SignatureScheme::EcDsaP256(DigestAlgorithm::Sha256)
     }
 }
 
