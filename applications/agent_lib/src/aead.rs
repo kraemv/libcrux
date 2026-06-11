@@ -1,3 +1,5 @@
+pub use libcrux_chacha20poly1305::{NONCE_LEN as CHACHA_NONCE_LEN, TAG_LEN as CHACHA_TAG_LEN};
+
 pub struct ChaCha20Poly1305;
 pub struct AeadNonce<const N: usize>([u8; N]);
 

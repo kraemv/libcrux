@@ -54,30 +54,20 @@ impl AEADKey<{size_of::<KeyID<ChaCha20Poly1305>>()}> for KeyID<ChaCha20Poly1305>
     type Nonce = AeadNonce<{chacha20poly1305::NONCE_LEN}>;
     const SCHEME: AEADAlgorithm = AEADAlgorithm::ChaCha20Poly1305;
 
-    /*let agent = get_agent_by_idx(self.agent_idx)
-            .ok_or_else(|| Error::Internal("No agent available".into()))?;
-        let id = agent
-                .mlkem_768_decaps_for_id(self.id.clone(), mlkem768::MlKem768Ciphertext::from(ct))
-                .map_err(|_| Error::Decaps)?;
-        Ok(SharedKeyID::new(id, self.agent_idx))*/
-
     fn encrypt<'a>(&self, ct: &'a mut [u8], nonce: Self::Nonce, aad: &[u8], plaintext: &[u8]) -> Result<(&'a [u8], Self::Tag), Error> {
         let agent = get_agent_by_idx(self.agent_idx)
             .ok_or_else(|| Error::Internal("No agent available".into()))?;
-        let mut tag = chacha20poly1305::Tag::from([0u8; chacha20poly1305::TAG_LEN]);
-        let nonce_bytes: [u8; chacha20poly1305::NONCE_LEN] = nonce.into();
-        let nonce = nonce_bytes.into();
-        self.encrypt(ct, &mut tag, &nonce, aad, plaintext)
-            .map(|()| (&ct[..], (*tag.as_ref()).into()))
+
+        agent.chacha20poly1305_encrypt_for_id(self.id.clone(), ct, nonce.into(), plaintext, aad)
             .map_err(|_| Error::Encrypt)
     }
 
     fn decrypt<'a>(&self, pt: &'a mut [u8], nonce: Self::Nonce, aad: &[u8], ct: &[u8], tag: Self::Tag) -> Result<&'a[u8], Error> {
-        let nonce: [u8; chacha20poly1305::NONCE_LEN] = nonce.into();
-        let tag: [u8; chacha20poly1305::TAG_LEN] = tag.into();
-        self.decrypt(pt, &nonce.into(), aad, ct, &tag.into())
-            .map_err(|_| Error::Decrypt)
-            .map(|()| &pt[..])
+        let agent = get_agent_by_idx(self.agent_idx)
+            .ok_or_else(|| Error::Internal("No agent available".into()))?;
+
+        agent.chacha20poly1305_decrypt_for_id(self.id.clone(), pt, nonce.into(), tag.into(), ct, aad)
+            .map_err(|_| Error::Encrypt)
     }
 }
 

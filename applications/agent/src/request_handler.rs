@@ -1,5 +1,6 @@
 use crate::keys::*;
 use crate::Error;
+use libcrux_agent::aead::*;
 use libcrux_agent::aead_messages::*;
 use libcrux_agent::hkdf_messages::*;
 use libcrux_agent::hmac::Sha2_256HMAC;
@@ -87,26 +88,26 @@ pub(crate) fn handle_request(request: &mut IPCRequest) -> Result<IPCResponse, Er
 pub(crate) fn handle_chacha20poly1305_decrypt_request(
     request: &mut AeadDecryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>
 ) -> Result<IPCResponse, Error> {
-    let id = &request.id;
-    let nonce = &request.nonce;
-    let tag = &request.tag;
-    let ctxt = request.ciphertext;
-    let aad = request.aad;
-    let plaintext = request.response.get_mut_plaintext();
-    chacha20poly1305_decrypt_for_id(id, plaintext, nonce, tag, ctxt, aad)
+    let id = request.get_id();
+    let nonce = request.get_nonce();
+    let ciphertext = request.get_ciphertext();
+    let tag = request.get_tag();
+    let aad = request.get_aad();
+    let mut plaintext = vec![0u8; ciphertext.len()];
+    chacha20poly1305_decrypt_for_id(id, &mut plaintext, nonce, tag, ciphertext, aad)
         .map(|plaintext| IPCResponse::from(AeadDecryptResponse::from(plaintext)))
 }
 
 pub(crate) fn handle_chacha20poly1305_encrypt_request(
     request: &mut AeadEncryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>
 ) -> Result<IPCResponse, Error> {
-    let id = &request.id;
-    let nonce = &request.nonce;
-    let ptxt = request.plaintext;
-    let aad = request.aad;
-    let ct = request.response.get_mut_ciphertext();
-    chacha20poly1305_encrypt_for_id(id, ct, nonce, ptxt, aad)
-        .map(|(ciphertext, tag)| IPCResponse::from(AeadEncryptResponse::from((ciphertext, tag))))
+    let id = request.get_id();
+    let nonce = request.get_nonce();
+    let plaintext = request.get_plaintext();
+    let aad = request.get_aad();
+    let mut ciphertext = vec![0u8; plaintext.len()];
+    chacha20poly1305_encrypt_for_id(id, &mut ciphertext, nonce, plaintext, aad)
+        .map(|(ciphertext, tag)| IPCResponse::from(AeadEncryptResponse::from_parts(ciphertext, tag)))
 }
 
 pub(crate) fn handle_ecdsa_p256_sign_request(

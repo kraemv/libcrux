@@ -2,14 +2,19 @@ use ipc_channel::ipc::{IpcBytesReceiver, IpcBytesSender, IpcOneShotServer};
 use std::process::Command;
 use zerocopy::TryFromBytes;
 
-use crate::{
-    Error, ID, aead::ChaCha20Poly1305, aead_messages::{AeadDecryptRequest, AeadDecryptResponse}, hkdf_messages::*, hmac::{HmacSha256Mac, Sha2_256HMAC}, hmac_messages::{HmacRequest, HmacResponse}, kex_messages::*, kx::{MlKem768Ciphertext, MlKem768PublicKey, X25519PublicKey}, messages::{
-        ExportRequest, ExportResponse, IPCRequest, IPCResponse, IPCSetupRequest, IPCSetupResponse,
-        MessageKind, SetupMessageKind,
-    }, signatures::{
+use crate::{Error, ID};
+use crate::aead::{AeadTag, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN};
+use crate::aead_messages::*;
+use crate::hkdf_messages::*;
+use crate::hmac::{HmacSha256Mac, Sha2_256HMAC};
+use crate::hmac_messages::{HmacRequest, HmacResponse};
+use crate::kex_messages::*;
+use crate::kx::{MlKem768Ciphertext, MlKem768PublicKey, X25519PublicKey};
+use crate::messages::*;
+use crate::signatures::{
         EcDsaP256PrivateKey, EcDsaP256PublicKey, EcDsaP256SHA256, EcDsaP256Signature, Ed25519, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature, SHA256
-    }, signing_messages::*
-};
+    };
+use crate::signing_messages::*;
 
 // Type aliases for libcrux ML-KEM types to avoid repetition
 type LibcruxMlKem768PublicKey = libcrux_ml_kem::mlkem768::MlKem768PublicKey;
@@ -138,16 +143,26 @@ impl Agent {
     // ChaCha20Poly1305
     // -------------------------------------------------------------------------
 
-    pub fn chacha20poly1305_decrypt_for_id<'a>(&self, id: &ID, plaintext: &'a mut [u8], nonce: &[u8; CHACHA_NONCE_LEN], tag: &[u8; CHACHA_TAG_LEN], ciphertext: &[u8], aad: &[u8]) -> Result<&'a mut [u8], Error>{
-        let pre_response = AeadDecryptResponse::<ChaCha20Poly1305>::new()
-        let request = IPCRequest::from(AeadDecryptRequest::<ChaCha20Poly1305>::new(id, ciphertext, nonce, tag, aad, response))
-        let response = self.send_recv(IPCRequest::from(value))
-        KEY_STORE.chacha20poly1305_decrypt_for_id(id, plaintext, nonce, tag, ciphertext, aad)
+    pub fn chacha20poly1305_decrypt_for_id<'a>(&self, id: ID, plaintext: &'a mut [u8], nonce: [u8; CHACHA_NONCE_LEN], tag: [u8; CHACHA_TAG_LEN], ciphertext: &[u8], aad: &[u8]) -> Result<&'a [u8], Error>{
+        let request = IPCRequest::from(AeadDecryptRequest::<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>::new(id, ciphertext, tag, nonce, aad));
+        let response = self.send_recv(request)?;
+
+        let payload = Self::expect_kind(&response, MessageKind::ChaCha20Poly1305Decrypt)?;
+        let pt = AeadDecryptResponse::<ChaCha20Poly1305>::from(payload);
+        plaintext.copy_from_slice(pt.as_ref());
+        Ok(plaintext)
     }
 
-    pub fn chacha20poly1305_encrypt_for_id<'a>(id: &ID, ciphertext: &'a mut [u8], nonce: &[u8; CHACHA_NONCE_LEN], plaintext: &[u8], aad: &[u8]) -> Result<(&'a mut [u8], [u8; CHACHA_TAG_LEN]), Error>{
-        let pre_response = AeadEncryptResponse::<ChaCha20Poly1305, {libcrux_chacha20poly1305::TAG_LEN}>
-        KEY_STORE.chacha20poly1305_encrypt_for_id(id, ciphertext, nonce, plaintext, aad)
+    pub fn chacha20poly1305_encrypt_for_id<'a>(&self, id: ID, ciphertext: &'a mut [u8], nonce: [u8; CHACHA_NONCE_LEN], plaintext: &[u8], aad: &[u8]) -> Result<(&'a [u8], AeadTag<CHACHA_TAG_LEN>), Error>{
+        let request = IPCRequest::from(AeadEncryptRequest::<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>::new(id, plaintext, nonce, aad));
+        let response = self.send_recv(request)?;
+
+        let payload = Self::expect_kind(&response, MessageKind::ChaCha20Poly1305Encrypt)?;
+        let (ct, tag) = AeadEncryptResponse::<ChaCha20Poly1305, CHACHA_TAG_LEN>::try_from(payload)
+            .map_err(|_| Error::MalformedResponse)?
+            .into_parts();
+        ciphertext.copy_from_slice(ct);
+        Ok((ciphertext, tag.into()))
     }
     // -------------------------------------------------------------------------
     // Signing

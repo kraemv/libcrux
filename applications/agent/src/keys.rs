@@ -1,7 +1,7 @@
 // use crate::signature::{DigestAlgorithm, EcDsaP256PrivKey, EcDsaP256PrivateKey, Error, Signature, SigningKey, SigningKeyType, VerificationKeyType};
 use crate::{Error, RNG};
 use libcrux_agent::{
-    ID, aead_messages::{CHACHA_NONCE_LEN, CHACHA_TAG_LEN}, hmac::HmacSha256Mac, key_store::KeyStore, kx::{MlKem768Ciphertext, MlKem768PublicKey, X25519PublicKey}, signatures::{EcDsaP256Signature, Ed25519Signature, SHA256}
+    ID, aead::{CHACHA_NONCE_LEN, CHACHA_TAG_LEN}, hmac::HmacSha256Mac, key_store::KeyStore, kx::{MlKem768Ciphertext, MlKem768PublicKey, X25519PublicKey}, signatures::{EcDsaP256Signature, Ed25519Signature, SHA256}
 };
 use libcrux_ml_kem::mlkem768;
 use std::sync::LazyLock;
@@ -13,11 +13,11 @@ static EPHEMERAL_KEY_STORE: LazyLock<KeyStore> = LazyLock::new(|| {
     KeyStore::new(&mut RNG.write().unwrap()).expect("Failed to initialize KeyStore")
 });
 
-pub fn chacha20poly1305_decrypt_for_id<'a>(id: &ID, plaintext: &'a mut [u8], nonce: &[u8; CHACHA_NONCE_LEN], tag: &[u8; CHACHA_TAG_LEN], ciphertext: &[u8], aad: &[u8]) -> Result<&'a mut [u8], Error>{
+pub fn chacha20poly1305_decrypt_for_id<'a>(id: &ID, plaintext: &'a mut [u8], nonce: &[u8; CHACHA_NONCE_LEN], tag: &[u8; CHACHA_TAG_LEN], ciphertext: &[u8], aad: &[u8]) -> Result<&'a [u8], Error>{
     KEY_STORE.chacha20poly1305_decrypt_for_id(id, plaintext, nonce, tag, ciphertext, aad)
 }
 
-pub fn chacha20poly1305_encrypt_for_id<'a>(id: &ID, ciphertext: &'a mut [u8], nonce: &[u8; CHACHA_NONCE_LEN], plaintext: &[u8], aad: &[u8]) -> Result<(&'a mut [u8], [u8; CHACHA_TAG_LEN]), Error>{
+pub fn chacha20poly1305_encrypt_for_id<'a>(id: &ID, ciphertext: &'a mut [u8], nonce: &[u8; CHACHA_NONCE_LEN], plaintext: &[u8], aad: &[u8]) -> Result<(&'a [u8], [u8; CHACHA_TAG_LEN]), Error>{
     KEY_STORE.chacha20poly1305_encrypt_for_id(id, ciphertext, nonce, plaintext, aad)
 }
 

@@ -222,7 +222,7 @@ impl KeyStore {
         Ok(tag)
     }
 
-    pub fn chacha20poly1305_decrypt_for_id<'a>(&self, id: &ID, plaintext: &'a mut [u8], nonce: &[u8; chacha20::NONCE_LEN], tag: &[u8; chacha20::TAG_LEN], ciphertext: &[u8], aad: &[u8]) -> Result<&'a mut [u8], Error>{
+    pub fn chacha20poly1305_decrypt_for_id<'a>(&self, id: &ID, plaintext: &'a mut [u8], nonce: &[u8; chacha20::NONCE_LEN], tag: &[u8; chacha20::TAG_LEN], ciphertext: &[u8], aad: &[u8]) -> Result<&'a [u8], Error>{
         let mut entries = self.entries.write().map_err(|_| Error::AEAD)?;
         match entries.entry(id.clone()) {
             Entry::Occupied(mut entry) => {
@@ -240,7 +240,7 @@ impl KeyStore {
         }
     }
     
-    pub fn chacha20poly1305_encrypt_for_id<'a>(&self, id: &ID, ciphertext: &'a mut [u8], nonce: &[u8; chacha20::NONCE_LEN], plaintext: &[u8], aad: &[u8]) -> Result<(&'a mut [u8], [u8; chacha20::TAG_LEN]), Error>{
+    pub fn chacha20poly1305_encrypt_for_id<'a>(&self, id: &ID, ciphertext: &'a mut [u8], nonce: &[u8; chacha20::NONCE_LEN], plaintext: &[u8], aad: &[u8]) -> Result<(&'a [u8], [u8; chacha20::TAG_LEN]), Error>{
         let mut entries = self.entries.write().map_err(|_| Error::AEAD)?;
         match entries.entry(id.clone()) {
             Entry::Occupied(mut entry) => {

@@ -1,3 +1,4 @@
+use crate::aead::{ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN};
 use crate::aead_messages::*;
 use crate::hkdf_messages::*;
 use crate::hmac::{HmacSha256Mac, Sha2_256HMAC};
