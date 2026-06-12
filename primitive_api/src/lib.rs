@@ -24,6 +24,7 @@ pub trait NetworkObject: Send + Sync + Sized + AsRef<[u8]> + for<'a> TryFrom<&'a
 impl NetworkObject for Vec<u8> {}
 
 impl<Scheme: Send + Sync> NetworkObject for KeyID<Scheme>{}
+
 // TODO: Add Impl generic for ambiguos types like salts and KEM PK
 
 /*

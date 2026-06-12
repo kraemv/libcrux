@@ -1,7 +1,7 @@
 use libcrux_chacha20poly1305 as chacha20poly1305;
 
-use crate::{KeyID, NetworkObject};
-use crate::provider::get_agent_by_idx;
+use crate::{NetworkObject, KeyID};
+use crate::provider::get_agent;
 use libcrux_agent::aead::{AeadNonce, AeadTag};
 pub use libcrux_agent::aead::ChaCha20Poly1305;
 
@@ -57,7 +57,7 @@ impl AEADKey<{size_of::<KeyID<ChaCha20Poly1305>>()}> for KeyID<ChaCha20Poly1305>
     const SCHEME: AEADAlgorithm = AEADAlgorithm::ChaCha20Poly1305;
 
     fn encrypt<'a>(&self, ct: &'a mut [u8], nonce: Self::Nonce, aad: &[u8], plaintext: &[u8]) -> Result<(&'a [u8], Self::Tag), Error> {
-        let agent = get_agent_by_idx(self.get_idx())
+        let agent = get_agent()
             .ok_or_else(|| Error::Internal("No agent available".into()))?;
 
         agent.chacha20poly1305_encrypt_for_id(self.get_id().clone(), ct, nonce.into(), plaintext, aad)
@@ -65,7 +65,7 @@ impl AEADKey<{size_of::<KeyID<ChaCha20Poly1305>>()}> for KeyID<ChaCha20Poly1305>
     }
 
     fn decrypt<'a>(&self, pt: &'a mut [u8], nonce: Self::Nonce, aad: &[u8], ct: &[u8], tag: Self::Tag) -> Result<&'a[u8], Error> {
-        let agent = get_agent_by_idx(self.get_idx())
+        let agent = get_agent()
             .ok_or_else(|| Error::Internal("No agent available".into()))?;
 
         agent.chacha20poly1305_decrypt_for_id(self.get_id().clone(), pt, nonce.into(), tag.into(), ct, aad)

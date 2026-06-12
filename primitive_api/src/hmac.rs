@@ -1,6 +1,6 @@
 use libcrux_agent::hmac::{HmacSha256Key, HmacSha256Mac, Sha2_256HMAC};
 
-use crate::{KeyID, NetworkObject, provider::get_agent_by_idx};
+use crate::{KeyID, NetworkObject, provider::get_agent};
 
 #[derive(Debug)]
 pub enum Error {
@@ -31,8 +31,8 @@ impl AuthenticationKey for KeyID<Sha2_256HMAC> {
     type Tag = HmacSha256Mac;
 
     fn authenticate(&self, msg: &[u8]) -> Result<Self::Tag, Error> {
-        let agent = get_agent_by_idx(self.get_idx()).ok_or_else(|| Error::Internal("No agent available".into()))?;
-        agent
+        get_agent()
+            .ok_or_else(|| Error::Internal("No agent available".into()))?
             .hmac_sha2_256_authenticate(self.get_id().clone(), msg)
             .map_err(|_| Error::Internal("Agent signing failed".into()))
     }

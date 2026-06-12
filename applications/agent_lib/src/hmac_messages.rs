@@ -51,7 +51,7 @@ impl<'a, Scheme> TryFrom<&'a [u8]> for HmacRequest<'a, Scheme> {
 
 impl<'a, Scheme> From<HmacRequest<'a, Scheme>> for Vec<u8> {
     fn from(request: HmacRequest<Scheme>) -> Self {
-        let mut result = request.id.0.to_vec();
+        let mut result = request.id.as_ref().to_vec();
         result.extend(request.message);
         result
     }

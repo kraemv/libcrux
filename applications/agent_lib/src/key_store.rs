@@ -440,7 +440,7 @@ impl KeyStore {
                 }
                 None => {
                     let default_key = SecretKey::SharedSecret(SharedKey::new([0u8; 32]));
-                    KeyStoreEntry::new(ID::from([0u8; 32]), default_key)
+                    KeyStoreEntry::new(ID::from([0u8; 31]), default_key)
                 }
             };
             

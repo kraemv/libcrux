@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::provider::{get_agent_and_idx, get_agent_by_idx};
+use crate::provider::get_agent;
 use crate::hkdf::HkdfIkm;
 use crate::{KeyID, NetworkObject};
 
@@ -52,26 +52,19 @@ impl NIKESecretKey for KeyID<X25519> {
     const SCHEME: NIKEScheme = NIKEScheme::X25519;
 
     fn keygen() -> Result<(Self, Self::PublicKey), Error> {
-        let (agent, agent_idx) =
-            get_agent_and_idx().ok_or_else(|| Error::Internal("No agent available".into()))?;
-        agent
+        get_agent()
+            .ok_or_else(|| Error::Internal("No agent available".into()))?
             .x25519_generate_key_id()
-            .map(|(id, pk)| {
-                (
-                    Self::new(id, agent_idx),
-                    pk,
-                )
-            })
+            .map(|(id, pk)| {(Self::new(id), pk)})
             .map_err(|_| Error::KeyGen)
     }
 
     fn derive(self, pk: Self::PublicKey) -> Result<KeyID<SharedKey>, Error> {
-        let agent = get_agent_by_idx(self.get_idx())
-            .ok_or_else(|| Error::Internal("No agent available".into()))?;
-        let id = agent
-                .x25519_derive_for_key_id(self.get_id().clone(), pk)
-                .map_err(|_| Error::Derive)?;
-        Ok(KeyID::<SharedKey>::new(id, self.get_idx()))
+        get_agent()
+            .ok_or_else(|| Error::Internal("No agent available".into()))?
+            .x25519_derive_for_key_id(self.get_id().clone(), pk)
+            .map(KeyID::<SharedKey>::new)
+            .map_err(|_| Error::Derive)
     }
 }
 

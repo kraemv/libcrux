@@ -1,4 +1,4 @@
-use crate::provider::{get_agent_and_idx, get_agent_by_idx};
+use crate::provider::get_agent;
 use crate::hkdf::HkdfIkm;
 
 use crate::{KeyID, NetworkObject};
@@ -59,26 +59,19 @@ impl DecapsKey for KeyID<MlKem768> {
     const SCHEME: KemScheme = KemScheme::MlKem768;
 
     fn keygen() -> Result<(Self, Self::PublicKey), Error> {
-        let (agent, agent_idx) =
-            get_agent_and_idx().ok_or_else(|| Error::Internal("No agent available".into()))?;
-        agent
+        get_agent()
+            .ok_or_else(|| Error::Internal("No agent available".into()))?
             .mlkem_768_generate_key_id()
-            .map(|(id, pk)| {
-                (
-                    Self::new(id, agent_idx),
-                    pk,
-                )
-            })
+            .map(|(id, pk)| {(Self::new(id), pk)})
             .map_err(|_| Error::KeyGen)
     }
 
     fn decaps(&self, ct:MlKem768Ciphertext ) -> Result<KeyID::<SharedKey>, Error> {
-        let agent = get_agent_by_idx(self.get_idx())
-            .ok_or_else(|| Error::Internal("No agent available".into()))?;
-        let id = agent
-                .mlkem_768_decaps_for_id(self.get_id().clone(), mlkem768::MlKem768Ciphertext::from(ct))
-                .map_err(|_| Error::Decaps)?;
-        Ok(KeyID::<SharedKey>::new(id, self.get_idx()))
+        get_agent()
+            .ok_or_else(|| Error::Internal("No agent available".into()))?
+            .mlkem_768_decaps_for_id(self.get_id().clone(), mlkem768::MlKem768Ciphertext::from(ct))
+            .map(KeyID::<SharedKey>::new)
+            .map_err(|_| Error::Decaps)
     }
 }
 
@@ -88,11 +81,11 @@ impl EncapsKey for MlKem768PublicKey {
     const SCHEME: KemScheme = KemScheme::MlKem768;
 
     fn encaps(&self) -> Result<(KeyID::<SharedKey>, MlKem768Ciphertext), Error> {
-        let (agent, agent_idx) = get_agent_and_idx().ok_or_else(|| Error::Internal("No agent available".into()))?;
-        let (id, ct) = agent
+        get_agent()
+            .ok_or_else(|| Error::Internal("No agent available".into()))?
             .mlkem_768_encaps_for_id(self)
-            .map_err(|_| Error::Encaps)?;
-        Ok((KeyID::<SharedKey>::new(id, agent_idx), ct))
+            .map(|(id, ct)| (KeyID::<SharedKey>::new(id), ct))
+            .map_err(|_| Error::Encaps)
     }
 }
 

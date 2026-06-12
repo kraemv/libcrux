@@ -1,14 +1,13 @@
 use std::marker::PhantomData;
 
 use libcrux_agent::hkdf::PseudorandomKey;
-use libcrux_agent::ID;
 use libcrux_agent::kx::SharedKey;
 use libcrux_hkdf;
 use libcrux_sha2::{Sha256, SHA256_LENGTH};
 
-use crate::hash::Hash;
+use crate::provider::get_agent;
 use crate::{AgentLib, Implementation, KeyID, Lib, NetworkObject, RandomKey};
-use crate::provider::get_agent_by_idx;
+use crate::hash::Hash;
 
 /// HKDF Errors
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,7 +21,7 @@ pub trait SaltValue {}
 pub trait HkdfIkm {}
 
 impl SaltValue for KeyID<RandomKey> {}
-impl SaltValue for Vec<u8> {}
+impl SaltValue for RandomKey {}
 
 impl HkdfIkm for KeyID<SharedKey>{}
 impl HkdfIkm for SharedKey {}
@@ -60,12 +59,6 @@ pub struct Hkdf<const N: usize, Algo: Hash<N>, Impl: Implementation>(PhantomData
 
 pub struct Sha256SaltedHKDF<Impl: Implementation>(Vec<u8>, PhantomData<Impl>);
 pub struct Sha256SecretSaltedHKDF(KeyID<RandomKey>);
-
-pub struct HKDFKeyID<const N: usize, Algo: Hash<N>> {
-    id: ID,
-    agent_idx: usize,
-    marker: PhantomData<Algo>,
-}
 
 impl<const N: usize, Algo: Hash<N>, Impl: Implementation> Hkdf<N, Algo, Impl> 
 {
@@ -114,7 +107,7 @@ impl RandomnessExtractor for Hkdf<SHA256_LENGTH, Sha256, Lib> {
 
 impl SaltedRandomnessExtractor for Sha256SaltedHKDF<AgentLib> {
     type Key = KeyID<SharedKey>;
-    type Prk = HKDFKeyID<SHA256_LENGTH, Sha256>;
+    type Prk = KeyID<Sha256>;
 
     fn extract_without_key(self) -> Result<impl HKDFKey, Error> {
         let mut prk = [0u8; 32];
@@ -125,10 +118,10 @@ impl SaltedRandomnessExtractor for Sha256SaltedHKDF<AgentLib> {
     }
 
     fn extract_with_key(self, key: Self::Key) -> Result<Self::Prk, Error> {
-        let agent = get_agent_by_idx(key.get_idx())
-            .ok_or(Error::Internal("No Agent".to_string()))?;
-        agent.hkdf_extract_public_salt(key.get_id().clone(), &self.0)
-            .map(|id| HKDFKeyID::<SHA256_LENGTH, Sha256>{id, agent_idx: key.get_idx(), marker: PhantomData})
+        get_agent()
+            .ok_or_else(|| Error::Internal("No agent available".into()))?
+            .hkdf_extract_public_salt(key.get_id().clone(), &self.0)
+            .map(KeyID::<Sha256>::new)
             .map_err(|_| Error::Extract)
     }
 }
@@ -155,40 +148,39 @@ impl SaltedRandomnessExtractor for Sha256SaltedHKDF<Lib> {
 
 impl SaltedRandomnessExtractor for Sha256SecretSaltedHKDF {
     type Key = KeyID<SharedKey>;
-    type Prk = HKDFKeyID<SHA256_LENGTH, Sha256>;
+    type Prk = KeyID<Sha256>;
 
     fn extract_without_key(self) -> Result<impl HKDFKey, Error> {
-        let agent = get_agent_by_idx(self.0.get_idx())
-            .ok_or(Error::Internal("No Agent".to_string()))?;
-        agent.hkdf_extract_secret_salt(None, self.0.get_id().clone())
-            .map(|id| HKDFKeyID{id, agent_idx: self.0.get_idx(), marker: PhantomData})
+        get_agent()
+            .ok_or_else(|| Error::Internal("No agent available".into()))?
+            .hkdf_extract_secret_salt(None, self.0.get_id().clone())
+            .map(KeyID::<Sha256>::new)
             .map_err(|_| Error::Extract)
     }
 
     fn extract_with_key(self, key: Self::Key) -> Result<Self::Prk, Error> {
-        let agent = get_agent_by_idx(key.get_idx())
-            .ok_or(Error::Internal("No Agent".to_string()))?;
-        agent.hkdf_extract_secret_salt(Some(key.get_id().clone()), self.0.get_id().clone())
-            .map(|id| HKDFKeyID{id, agent_idx: key.get_idx(), marker: PhantomData})
+        get_agent()
+            .ok_or_else(|| Error::Internal("No agent available".into()))?
+            .hkdf_extract_secret_salt(Some(key.get_id().clone()), self.0.get_id().clone())
+            .map(KeyID::<Sha256>::new)
             .map_err(|_| Error::Extract)
     }
 }
-impl HKDFKey for HKDFKeyID<SHA256_LENGTH, Sha256> {
+impl HKDFKey for KeyID<Sha256> {
     const N: usize = SHA256_LENGTH;
     type Okm = KeyID<RandomKey>;
     
     fn expand(&self, output_len: usize, info: &[u8]) -> Result<Self::Okm, Error> {
-        let agent: std::sync::MutexGuard<'_, libcrux_agent::agent::Agent> = get_agent_by_idx(self.agent_idx)
-            .ok_or_else(|| Error::Internal("No agent available".into()))?;
-        agent.hkdf_expand(self.id.clone(), output_len, info)
-            .map(|id| KeyID::new(id, self.agent_idx))
+        get_agent()
+            .ok_or_else(|| Error::Internal("No agent available".into()))?
+            .hkdf_expand(self.get_id().clone(), output_len, info)
+            .map(KeyID::<RandomKey>::new)
             .map_err(|_| Error::Expand)
     }
 
     fn expand_declassify(&self, output_len: usize, info: &[u8]) -> Result<RandomKey, Error> {
-        let agent: std::sync::MutexGuard<'_, libcrux_agent::agent::Agent> = get_agent_by_idx(self.agent_idx)
-            .ok_or_else(|| Error::Internal("No agent available".into()))?;
-        agent.hkdf_expand(self.id.clone(), output_len, info)
+        let agent = get_agent().ok_or_else(|| Error::Internal("No agent available".into()))?;
+        agent.hkdf_expand(self.get_id().clone(), output_len, info)
             .map(|id| agent.export_nonce(id).map_err(|_| Error::Expand))
             .map_err(|_| Error::Expand)?
         
@@ -207,19 +199,5 @@ impl HKDFKey for PseudorandomKey {
 
     fn expand_declassify(&self, output_len: usize, info: &[u8]) -> Result<RandomKey, Error> {
         self.expand(output_len, info)
-    }
-}
-
-impl<const N: usize, Algo> TryFrom<&[u8]> for HKDFKeyID<N, Algo> 
-where
-    Algo: Hash<N>,
-{
-    type Error = Error;
-
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        let (id, idx) = value.split_at_checked(size_of::<ID>()).ok_or( Error::Internal("Malformed shared key".to_string()))?;
-        let id = ID::try_from(id).map_err(|_| Error::Internal("Malformed ID".to_string()))?;
-        let agent_idx = usize::from_be_bytes(idx.try_into().map_err(|_| Error::Internal("Malformed ID".to_string()))?);
-        Ok(HKDFKeyID { id, agent_idx, marker: PhantomData })
     }
 }
