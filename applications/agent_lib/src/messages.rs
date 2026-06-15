@@ -40,6 +40,7 @@ pub enum SetupMessageKind {
     AgentInit,
     EcDsaP256Key,
     Ed25519Key,
+    Error,
 }
 
 // ---------------------------------------------------------------------------
@@ -278,3 +279,8 @@ impl From<Error> for IPCResponse {
     }
 }
 
+impl From<Error> for IPCSetupResponse {
+    fn from(msg: Error) -> Self {
+        Self::new(SetupMessageKind::Error, msg.as_bytes().to_vec())
+    }
+}

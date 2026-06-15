@@ -1,3 +1,4 @@
+use crate::ID_SIZE;
 use crate::hkdf::*;
 use crate::hmac::HmacSha256Key;
 use crate::hmac::HmacSha256Mac;
@@ -165,7 +166,7 @@ impl KeyStore {
         for line in lines {
             let mut parts = line.split(|c| *c == b' ');
             let scheme = parts.next().ok_or(Error::Encoding)?;
-            let mut id = [0u8; 32];
+            let mut id = [0u8; ID_SIZE];
             parts
                 .next()
                 .map(|enc_id: &[u8]| Base64::decode(enc_id, &mut id).unwrap())
@@ -222,7 +223,7 @@ impl KeyStore {
     }
 
     fn get_tag(&self, bytes: &[u8], customization: &[u8]) -> Result<ID, Error> {
-        let mut tag = [0u8; 32];
+        let mut tag = [0u8; ID_SIZE];
         kmac::kmac_128(&mut tag, &self.root_key, bytes, customization)
             .try_into()
             .map_err(|_| Error::MAC)
@@ -251,7 +252,7 @@ impl KeyStore {
         match entries.entry(id.clone()) {
             Entry::Occupied(mut entry) => {
                 let entry = entry.get_mut();
-                entry.get_mut_key().set_chacha20poly1305_key().ok_or(Error::AEAD)?;
+                entry.get_mut_key().set_chacha20poly1305_key().ok_or(Error::Unsupported)?;
                 let mut tag = chacha20::Tag::from([0u8; chacha20::TAG_LEN]);
                 match entry.get_key() {
                     SecretKey::ChaCha20Poly1305Key(key) => {

@@ -30,6 +30,10 @@ pub(crate) fn handle_request(request: &IPCSetupRequest) -> Result<IPCSetupRespon
                 .map_err(|_| Error::MalformedRequest)?;
             import_ed25519_key(key.get_private_key()).map(|res| IPCSetupResponse::from(&res))
         }
+        SetupMessageKind::Error => {
+            Err(Error::IO)
+        }
+
     }
 }
 
