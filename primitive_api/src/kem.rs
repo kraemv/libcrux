@@ -1,10 +1,16 @@
+use std::marker::PhantomData;
+
 use crate::provider::get_agent;
 use crate::hkdf::HkdfIkm;
 
-use crate::{KeyID, NetworkObject};
+use crate::{AgentLib, Implementation, KeyID, Lib, NetworkObject};
 
 use libcrux_agent::kx::SharedKey;
-use libcrux_ml_kem::mlkem768::{self, MlKem768Ciphertext, MlKem768PublicKey};
+use libcrux_ml_kem;
+use libcrux_ml_kem::mlkem768::{self, MlKem768Ciphertext, MlKem768PrivateKey};
+
+use rand::{RngCore, SeedableRng};
+use rand_chacha::ChaChaRng;
 
 /// KEM Errors
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,8 +58,19 @@ pub enum KemScheme {
     // X25519MlKem768,
 }
 
+pub struct MlKem768PublicKey<Impl: Implementation>{
+    inner: mlkem768::MlKem768PublicKey,
+    marker: PhantomData<Impl>,
+}
+
+impl<Impl: Implementation> MlKem768PublicKey<Impl> {
+    fn new(pk: mlkem768::MlKem768PublicKey) -> Self {
+        Self { inner: pk, marker: PhantomData }
+    }
+}
+
 impl DecapsKey for KeyID<MlKem768> {
-    type PublicKey = MlKem768PublicKey;
+    type PublicKey = MlKem768PublicKey<AgentLib>;
     type Ciphertext = MlKem768Ciphertext;
     type SharedSecret = KeyID<SharedKey>;
     const SCHEME: KemScheme = KemScheme::MlKem768;
@@ -62,20 +79,20 @@ impl DecapsKey for KeyID<MlKem768> {
         get_agent()
             .ok_or_else(|| Error::Internal("No agent available".into()))?
             .mlkem_768_generate_key_id()
-            .map(|(id, pk)| {(Self::new(id), pk)})
+            .map(|(id, pk)| {(Self::new(id), MlKem768PublicKey::new(pk))})
             .map_err(|_| Error::KeyGen)
     }
 
     fn decaps(&self, ct:MlKem768Ciphertext ) -> Result<KeyID::<SharedKey>, Error> {
         get_agent()
             .ok_or_else(|| Error::Internal("No agent available".into()))?
-            .mlkem_768_decaps_for_id(self.get_id().clone(), mlkem768::MlKem768Ciphertext::from(ct))
+            .mlkem_768_decaps_for_id(self.get_id().clone(), MlKem768Ciphertext::from(ct))
             .map(KeyID::<SharedKey>::new)
             .map_err(|_| Error::Decaps)
     }
 }
 
-impl EncapsKey for MlKem768PublicKey {
+impl EncapsKey for MlKem768PublicKey<AgentLib> {
     type Ciphertext = MlKem768Ciphertext;
     type SharedSecret = KeyID<SharedKey>;
     const SCHEME: KemScheme = KemScheme::MlKem768;
@@ -83,10 +100,59 @@ impl EncapsKey for MlKem768PublicKey {
     fn encaps(&self) -> Result<(KeyID::<SharedKey>, MlKem768Ciphertext), Error> {
         get_agent()
             .ok_or_else(|| Error::Internal("No agent available".into()))?
-            .mlkem_768_encaps_for_id(self)
+            .mlkem_768_encaps_for_id(&self.inner)
             .map(|(id, ct)| (KeyID::<SharedKey>::new(id), ct))
             .map_err(|_| Error::Encaps)
     }
 }
 
+impl DecapsKey for MlKem768PrivateKey {
+    type PublicKey = MlKem768PublicKey<Lib>;
+    type Ciphertext = MlKem768Ciphertext;
+    type SharedSecret = SharedKey;
+    const SCHEME: KemScheme = KemScheme::MlKem768;
+
+    fn keygen() -> Result<(Self, Self::PublicKey), Error> {
+        let mut rng = ChaChaRng::from_os_rng();
+        let mut rand = [0u8; libcrux_ml_kem::KEY_GENERATION_SEED_SIZE];
+        rng.fill_bytes(&mut rand);
+        let (sk, pk) = mlkem768::generate_key_pair(rand).into_parts();
+        Ok((sk, MlKem768PublicKey::new(pk)))
+    }
+
+    fn decaps(&self, ct:MlKem768Ciphertext ) -> Result<SharedKey, Error> {
+       Ok(SharedKey::new(mlkem768::decapsulate(self, &ct)))
+    }
+}
+
+impl EncapsKey for MlKem768PublicKey<Lib> {
+    type Ciphertext = MlKem768Ciphertext;
+    type SharedSecret = SharedKey;
+    const SCHEME: KemScheme = KemScheme::MlKem768;
+
+    fn encaps(&self) -> Result<(SharedKey, MlKem768Ciphertext), Error> {
+        let mut rng = ChaChaRng::from_os_rng();
+        let mut rand = [0u8; libcrux_ml_kem::SHARED_SECRET_SIZE];
+        rng.fill_bytes(&mut rand);
+        let (ct, shk) = mlkem768::encapsulate(&self.inner, rand);
+        Ok((SharedKey::new(shk), ct))
+    }
+}
+
 impl NetworkObject for MlKem768Ciphertext {}
+
+impl<Impl: Implementation> AsRef<[u8]> for MlKem768PublicKey<Impl> {
+    fn as_ref(&self) -> &[u8] {
+        self.inner.as_ref()
+    }
+}
+
+impl<Impl: Implementation> TryFrom<&[u8]> for MlKem768PublicKey<Impl> {
+    type Error = Error;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        mlkem768::MlKem768PublicKey::try_from(value)
+            .map(|pk| Self::new(pk))
+            .map_err(|_| Error::InvalidKey)
+    }
+}
