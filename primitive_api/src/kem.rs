@@ -21,7 +21,10 @@ pub enum Error {
     KeyGen,
     InvalidKey,
     InputTooLarge,
+    Rejected
 }
+
+pub type DefaultKEMKey = MlKem768PrivateKey;
 
 pub trait Kem{}
 
@@ -30,6 +33,22 @@ pub struct MlKem768{}
 
 impl Kem for MlKem768 {}
 
+/// Minimal example:
+/// ```
+/// use libcrux_primitive_api::kem::*;
+/// 
+/// let (sk_a, pk_a) = DefaultKEMKey::keygen().expect("Keygen failed");
+/// 
+/// let (shk_a, ct) = pk_a.encaps().expect("Encaps failed");
+/// let shk_b = match sk_a.decaps(ct) {
+///     Ok(shk_b) => shk_b,
+///     Err(Error::Rejected) => return println!("Rejected ciphertext"),
+///     Err(Error::Decaps) => return println!("Decapsulation had an internal error"),
+///     _ => return println!("Unexpected Error"),
+/// };
+/// 
+/// assert_eq!(shk_a, shk_b)
+/// ```
 pub trait DecapsKey: Send + Sync + Sized {
     type PublicKey: EncapsKey + Sized;
     type Ciphertext: NetworkObject;

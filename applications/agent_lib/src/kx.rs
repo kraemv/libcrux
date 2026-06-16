@@ -4,6 +4,7 @@ use libcrux_ml_kem::mlkem768;
 use rand::CryptoRng;
 use zerocopy::*;
 
+#[derive(Debug, Eq, PartialEq)]
 pub struct SharedKey([u8; 32]);
 
 /// An ML-KEM-768 public key (1184 bytes).

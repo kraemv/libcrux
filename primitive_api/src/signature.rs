@@ -21,7 +21,10 @@ use pkcs8::{ObjectIdentifier, PrivateKeyInfo};
 use pki_types::PrivatePkcs8KeyDer;
 use x509_cert::attr::Attribute;
 
-pub type DefaultSigningKey = libcrux_ed25519::SigningKey;
+use rand::SeedableRng;
+use rand_chacha::ChaChaRng;
+
+pub type DefaultSigningKey = Ed25519SigningKey;
 
 /// Signature Errors
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,11 +48,6 @@ pub struct EcDsaP256{}
 impl Sig for Ed25519 {}
 impl Sig for EcDsaP256 {}
 
-impl NetworkObject for EcDsaP256PublicKey<SHA256> { }
-impl NetworkObject for signatures::EcDsaP256Signature<SHA256>{ }
-impl NetworkObject for Ed25519PublicKey { }
-impl NetworkObject for signatures::Ed25519Signature{ }
-
 /// Minimal example:
 /// ```
 /// use libcrux_primitive_api::signature::*;
@@ -71,7 +69,7 @@ impl NetworkObject for signatures::Ed25519Signature{ }
 /// ```
 /// use libcrux_primitive_api::signature::*;
 /// 
-/// let (sk, vk) = libcrux_ed25519::SigningKey::keygen().expect("Keygen failed");
+/// let (sk, vk) = Ed25519SigningKey::keygen().expect("Keygen failed");
 /// 
 /// let msg = b"Test message";
 /// let sig = sk.sign(msg).expect("Signing failed");
@@ -83,9 +81,6 @@ impl NetworkObject for signatures::Ed25519Signature{ }
 ///     _ => println!("Unexpected Error"),
 /// }
 /// ```
-/// Missing: signing key from file
-/// Missing: Verification for existing signature
-/// 
 /// Marker traits: implement markers to specify security notions, robustness properties...
 /// 
 /// To document (via Marker traits):
@@ -95,7 +90,7 @@ impl NetworkObject for signatures::Ed25519Signature{ }
 /// Length requirements for variable length input/output schemes
 /// 
 /// In future: Default is PQ
-pub trait SigningKey<const N: usize>: Send + Sync + Sized + for<'a> TryFrom<PrivatePkcs8KeyDer<'a>>{
+pub trait SigningKey: Send + Sync + Sized + for<'a> TryFrom<PrivatePkcs8KeyDer<'a>>{
     type PublicKey: VerificationKey + NetworkObject;
     type Signature: NetworkObject;
     const SCHEME: SignatureScheme;
@@ -135,6 +130,12 @@ pub struct SigningKeyID<Scheme: Sig, Vk: VerificationKey> {
     marker: PhantomData<Scheme>,
 }
 
+
+pub struct Ed25519SigningKey{
+    sk: libcrux_ed25519::SigningKey,
+    vk: Ed25519PublicKey,
+}
+
 impl SigningKeyID<EcDsaP256, EcDsaP256PublicKey::<SHA256>> {
     pub fn new(id: ID, public_key: EcDsaP256PublicKey::<SHA256>) -> Self {
         Self {
@@ -155,7 +156,7 @@ impl SigningKeyID<Ed25519, Ed25519PublicKey> {
     }
 }
 
-impl SigningKey<64> for SigningKeyID<Ed25519, Ed25519PublicKey> {
+impl SigningKey for SigningKeyID<Ed25519, Ed25519PublicKey> {
     type PublicKey = Ed25519PublicKey;
     type Signature = signatures::Ed25519Signature;
     const SCHEME: SignatureScheme = SignatureScheme::Ed25519;
@@ -169,6 +170,47 @@ impl SigningKey<64> for SigningKeyID<Ed25519, Ed25519PublicKey> {
 
     fn to_public(&self) -> &Self::PublicKey {
         &self.public_key
+    }
+}
+
+impl SigningKey for SigningKeyID<EcDsaP256, EcDsaP256PublicKey::<SHA256>> {
+    type PublicKey = EcDsaP256PublicKey::<SHA256>;
+    type Signature = signatures::EcDsaP256Signature::<SHA256>;
+    const SCHEME: SignatureScheme = SignatureScheme::EcDsaP256(DigestAlgorithm::Sha256);
+
+    fn sign(&self, payload: &[u8]) -> Result<Self::Signature, Error> {
+        let agent = get_agent().ok_or_else(|| Error::InternalError("No agent available".into()))?;
+        agent
+            .ecdsa_p256_sign_for_id(self.id.clone(), payload)
+            .map_err(|_| Error::InternalError("Agent signing failed".into()))
+    }
+
+    fn to_public(&self) -> &Self::PublicKey {
+        &self.public_key
+    }
+}
+
+impl SigningKey for Ed25519SigningKey {
+    type PublicKey = Ed25519PublicKey;
+    type Signature = signatures::Ed25519Signature;
+    const SCHEME: SignatureScheme = SignatureScheme::Ed25519;
+
+    fn keygen() -> Result<(Self, Self::PublicKey), Error> {
+        let mut rng = ChaChaRng::from_os_rng();
+        ed25519::generate_key_pair(&mut rng)
+            .map(|(sk, vk)| (sk, Ed25519PublicKey::new(vk)))
+            .map(|(sk, vk)| (Ed25519SigningKey{sk, vk: vk.clone()}, vk))
+            .map_err(|_| Error::KeyGenError)
+    }
+
+    fn sign(&self, payload: &[u8]) -> Result<Self::Signature, Error> {
+        ed25519::sign(payload, self.sk.as_ref())
+            .map_err(|_| Error::SigningError)
+            .map(signatures::Ed25519Signature::new)
+    }
+
+    fn to_public(&self) -> &Self::PublicKey {
+        &self.vk
     }
 }
 
@@ -195,23 +237,6 @@ impl TryFrom<PrivatePkcs8KeyDer<'_>> for SigningKeyID<Ed25519, Ed25519PublicKey>
             }
             _ => Err(pkcs8::Error::KeyMalformed),
         }
-    }
-}
-
-impl SigningKey<64> for SigningKeyID<EcDsaP256, EcDsaP256PublicKey::<SHA256>> {
-    type PublicKey = EcDsaP256PublicKey::<SHA256>;
-    type Signature = signatures::EcDsaP256Signature::<SHA256>;
-    const SCHEME: SignatureScheme = SignatureScheme::EcDsaP256(DigestAlgorithm::Sha256);
-
-    fn sign(&self, payload: &[u8]) -> Result<Self::Signature, Error> {
-        let agent = get_agent().ok_or_else(|| Error::InternalError("No agent available".into()))?;
-        agent
-            .ecdsa_p256_sign_for_id(self.id.clone(), payload)
-            .map_err(|_| Error::InternalError("Agent signing failed".into()))
-    }
-
-    fn to_public(&self) -> &Self::PublicKey {
-        &self.public_key
     }
 }
 
@@ -248,6 +273,32 @@ impl TryFrom<PrivatePkcs8KeyDer<'_>> for SigningKeyID<EcDsaP256, EcDsaP256Public
                 let id = extract_id(&attrs).ok_or(pkcs8::Error::KeyMalformed)?;
 
                 Ok(SigningKeyID::<EcDsaP256, EcDsaP256PublicKey::<SHA256>>::new(id, public_key))
+            }
+            _ => Err(pkcs8::Error::KeyMalformed),
+        }
+    }
+}
+
+impl TryFrom<PrivatePkcs8KeyDer<'_>> for Ed25519SigningKey {
+    type Error = pkcs8::Error;
+
+    fn try_from(der: PrivatePkcs8KeyDer<'_>) -> Result<Self, Self::Error> {
+        type PkInfoType<'a> = PrivateKeyInfo<Any, OctetString, BitString, SetOfRef<'a, Attribute>>;
+
+        let private_key_info: PkInfoType = pkcs8::PrivateKeyInfo::try_from(der.secret_pkcs8_der())?;
+        let algo_oid_arcs: Vec<OidArc> = private_key_info.algorithm.oid.arcs().collect();
+
+        match algo_oid_arcs.as_slice() {
+            // `id-Ed25519' from RFC rfc8410
+            [1, 3, 101, 112] => {
+                let private_key = private_key_info.private_key.as_bytes().try_into().map_err(|_| pkcs8::Error::KeyMalformed)?;
+                let sk = libcrux_ed25519::SigningKey::from_bytes(private_key);
+
+                let public_key = private_key_info.public_key.ok_or(pkcs8::Error::KeyMalformed)?;
+                let public_key: [u8; 32] = public_key.as_bytes().ok_or(pkcs8::Error::KeyMalformed)?.try_into().map_err(|_| pkcs8::Error::KeyMalformed)?;
+                let vk = Ed25519PublicKey::new(ed25519::VerificationKey::from_bytes(public_key));
+
+                Ok(Ed25519SigningKey{sk, vk})
             }
             _ => Err(pkcs8::Error::KeyMalformed),
         }
@@ -315,3 +366,8 @@ fn decode_ecdsa_public_key(public_key: [u8; 65]) -> Result<EcDsaP256PublicKey::<
         .map(EcDsaP256PublicKey::<SHA256>::from)
         .map_err(|_| pkcs8::Error::KeyMalformed)
 }
+
+impl NetworkObject for EcDsaP256PublicKey<SHA256> { }
+impl NetworkObject for signatures::EcDsaP256Signature<SHA256>{ }
+impl NetworkObject for Ed25519PublicKey { }
+impl NetworkObject for signatures::Ed25519Signature{ }

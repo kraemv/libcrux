@@ -503,7 +503,7 @@ impl KeyStore {
                 let entry = entry.get_mut();
                 entry.get_mut_key().set_hmac256_key().ok_or(Error::Unsupported)?;
                 match entry.get_key() {
-                    SecretKey::HMACKey(key) => Ok(key.authenticate(message)),
+                    SecretKey::HMACKey(key) => Ok(key.authenticate_msg(message)),
                     _ => Err(Error::Unsupported),
                 }
             }

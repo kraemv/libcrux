@@ -31,7 +31,7 @@ impl HmacSha256Key {
         &self.0
     }
 
-    pub fn authenticate(
+    pub fn authenticate_msg(
         &self,
         message: &[u8],
     ) -> HmacSha256Mac {

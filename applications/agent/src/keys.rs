@@ -6,6 +6,7 @@ use libcrux_agent::kx::{MlKem768Ciphertext, MlKem768PublicKey, X25519PublicKey};
 use libcrux_agent::signatures::{EcDsaP256Signature, Ed25519Signature, SHA256};
 
 use libcrux_ml_kem::mlkem768;
+use rand::CryptoRng;
 use std::sync::LazyLock;
 
 static KEY_STORE: LazyLock<KeyStore> =
@@ -15,8 +16,12 @@ static EPHEMERAL_KEY_STORE: LazyLock<KeyStore> = LazyLock::new(|| {
     KeyStore::new(&mut RNG.write().unwrap()).expect("Failed to initialize KeyStore")
 });
 
+fn get_rng() -> Result<impl CryptoRng, Error> {
+    RNG.write().map_err(|_| Error::RNG)
+}
+
 pub fn ecdsa_p256_sign_for_id(id: &ID, message: &[u8]) -> Result<EcDsaP256Signature<SHA256>, Error> {
-    KEY_STORE.ecdsa_p256_sign_for_id(id, message, &mut RNG.write().unwrap())
+    KEY_STORE.ecdsa_p256_sign_for_id(id, message, &mut get_rng()?)
 }
 
 pub fn ed25519_sign_for_id(id: &ID, message: &[u8]) -> Result<Ed25519Signature, Error> {
@@ -32,11 +37,11 @@ pub fn chacha20poly1305_encrypt_for_id<'a>(id: &ID, ciphertext: &'a mut [u8], no
 }
 
 pub fn x25519_generate_key_id() -> Result<(ID, X25519PublicKey), Error> {
-    EPHEMERAL_KEY_STORE.x25519_generate_key(&mut RNG.write().unwrap())
+    EPHEMERAL_KEY_STORE.x25519_generate_key(&mut get_rng()?)
 }
 
 pub fn mlkem_768_generate_key_id() -> Result<(ID, MlKem768PublicKey), Error> {
-    EPHEMERAL_KEY_STORE.mlkem_768_generate_key(&mut RNG.write().unwrap())
+    EPHEMERAL_KEY_STORE.mlkem_768_generate_key(&mut get_rng()?)
 }
 
 pub fn x25519_derive_for_key_id(id: &ID, pk: &X25519PublicKey) -> Result<ID, Error> {
@@ -50,7 +55,7 @@ pub fn mlkem_768_decaps_for_id(id: &ID, ct: mlkem768::MlKem768Ciphertext) -> Res
 pub fn mlkem_768_encaps_for_id(
     pk: &MlKem768PublicKey,
 ) -> Result<(ID, MlKem768Ciphertext), Error> {
-    EPHEMERAL_KEY_STORE.mlkem_768_encaps_for_id(pk, &mut RNG.write().unwrap())
+    EPHEMERAL_KEY_STORE.mlkem_768_encaps_for_id(pk, &mut get_rng()?)
 }
 
 pub fn export_nonce(id: &ID) -> Result<[u8; 12], Error> {

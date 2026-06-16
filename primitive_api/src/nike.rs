@@ -21,6 +21,8 @@ pub enum Error {
     InputTooLarge,
 }
 
+pub type DefaultNIKEKey = X25519SecretKey;
+
 pub trait Nike{}
 
 #[derive(Clone, Debug)]
@@ -28,7 +30,18 @@ pub struct X25519{}
 
 impl Nike for X25519 {}
 
-
+/// Minimal example:
+/// ```
+/// use libcrux_primitive_api::nike::*;
+/// 
+/// let (sk_a, pk_a) = DefaultNIKEKey::keygen().expect("Keygen failed");
+/// let (sk_b, pk_b) = DefaultNIKEKey::keygen().expect("Keygen failed");
+/// 
+/// let shk_a = sk_a.derive(pk_b).expect("Derive failed");
+/// let shk_b = sk_b.derive(pk_a).expect("Derive failed");
+/// 
+/// assert_eq!(shk_a, shk_b)
+/// ```
 pub trait NIKESecretKey: Send + Sync + Sized {
     type PublicKey: Debug + NetworkObject;
     type SharedSecret: HkdfIkm + NetworkObject;

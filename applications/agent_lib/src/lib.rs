@@ -19,6 +19,7 @@ pub enum Error {
     MalformedResponse,
     NoAgent,
     PublicKey,
+    RNG,
     Signing,
     Sync,
     UnknownID,

@@ -17,6 +17,8 @@ pub enum Error {
     Expand,
 }
 
+pub type DefaultHKDF = Hkdf<SHA256_LENGTH, Sha256, Lib>;
+
 pub trait SaltValue {}
 pub trait HkdfIkm {}
 
@@ -26,7 +28,30 @@ impl SaltValue for RandomKey {}
 impl HkdfIkm for KeyID<SharedKey>{}
 impl HkdfIkm for SharedKey {}
 
-const SHA2_256_SALT: [u8; SHA256_LENGTH] = [0u8; SHA256_LENGTH];
+/// Minimal example:
+/// ```
+/// use rand::{RngCore, SeedableRng};
+/// use rand_chacha::ChaChaRng;
+/// 
+/// use libcrux_primitive_api::hkdf::*;
+/// use libcrux_primitive_api::nike::*;
+/// 
+/// let (sk_a, pk_a) = DefaultNIKEKey::keygen().expect("Keygen failed");
+/// let (sk_b, pk_b) = DefaultNIKEKey::keygen().expect("Keygen failed");
+/// 
+/// let shk_a = sk_a.derive(pk_b).expect("Derive failed");
+/// let shk_b = sk_b.derive(pk_a).expect("Derive failed");
+/// 
+/// let salt = Some(b"1+1=2".as_ref());
+/// let prk_a = DefaultHKDF::new().with_salt(salt).extract_with_key(shk_a).expect("Extraction failed");
+/// let prk_b = DefaultHKDF::new().with_salt(salt).extract_with_key(shk_b).expect("Extraction failed");
+/// 
+/// let info = b"Test key";
+/// let okm_a = prk_a.expand(32, info).expect("Expansion failed");
+/// let okm_b = prk_b.expand(32, info).expect("Expansion failed");
+/// 
+/// assert_eq!(okm_a, okm_b)
+/// ```
 pub trait RandomnessExtractor: Send + Sync {
     type Salt: SaltValue + for <'a> TryFrom<&'a [u8]>;
     type PublicExtractor: SaltedRandomnessExtractor;
@@ -54,6 +79,8 @@ pub trait HKDFKey: Send + Sync {
 
     fn expand_declassify(&self, output_len: usize, info: &[u8]) -> Result<RandomKey, Error>;
 }
+
+const SHA2_256_SALT: [u8; SHA256_LENGTH] = [0u8; SHA256_LENGTH];
 
 pub struct Hkdf<const N: usize, Algo: Hash<N>, Impl: Implementation>(PhantomData<(Algo, Impl)>);
 
