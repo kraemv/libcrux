@@ -1,6 +1,7 @@
 use base64ct::{Base64, Encoding};
 use libcrux_agent::ID;
-use rand::rand_core::{OsRng, TryRngCore};
+use rand::rngs::SysRng;
+use rand::TryRng;
 use std::sync::LazyLock;
 use zerocopy::*;
 
@@ -56,7 +57,7 @@ fn init_agent() -> Result<(), Error> {
     // Draw a random root key and encode it in b64 for the root file
     let mut root_key = [0u8; 32];
     let mut b64_encoded_key = [0u8; 44];
-    OsRng.try_fill_bytes(&mut root_key).map_err(|_| Error::IO)?;
+    SysRng.try_fill_bytes(&mut root_key).map_err(|_| Error::IO)?;
     Base64::encode(&root_key, &mut b64_encoded_key).map_err(|_| Error::Encoding)?;
 
     // Write the key to the root file

@@ -2,6 +2,7 @@ use ipc_channel::ipc::{IpcBytesReceiver, IpcBytesSender, IpcOneShotServer};
 use std::process::Command;
 use zerocopy::TryFromBytes;
 
+use crate::rng_messages::EntropyRequest;
 use crate::{Error, ID};
 use crate::aead::{AeadTag, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN};
 use crate::aead_messages::*;
@@ -139,6 +140,18 @@ impl Agent {
         }
     }
 
+
+    // -------------------------------------------------------------------------
+    // Entropy
+    // -------------------------------------------------------------------------
+
+    pub fn add_entropy(&self, entropy: &[u8]) -> Result<(), Error> {
+        let request = IPCRequest::from(EntropyRequest::from(entropy));
+        let response = self.send_recv(request)?;
+
+        let _ = Self::expect_kind(&response, MessageKind::Entropy)?;
+        Ok(())
+    }
     // -------------------------------------------------------------------------
     // ChaCha20Poly1305
     // -------------------------------------------------------------------------

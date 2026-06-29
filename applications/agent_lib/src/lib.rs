@@ -41,3 +41,4 @@ pub mod hkdf_messages;
 pub mod messages;
 pub mod signatures;
 pub mod signing_messages;
+pub mod rng_messages;

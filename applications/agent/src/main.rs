@@ -6,13 +6,14 @@ use ipc_channel::ipc::*;
 use ipc_channel::IpcError;
 use libcrux_agent::messages::IPCRequest;
 use libcrux_agent::Error;
+use libcrux_hmac_drbg::HmacDrbgSha256;
 use rand::SeedableRng;
-use rand_chacha::*;
+use rand::rngs::SysRng;
 use std::env;
 use std::sync::{LazyLock, RwLock};
 
-static RNG: LazyLock<RwLock<ChaCha20Rng>> =
-    LazyLock::new(|| RwLock::new(ChaCha20Rng::from_os_rng()));
+static RNG: LazyLock<RwLock<HmacDrbgSha256>> =
+    LazyLock::new(|| RwLock::new(HmacDrbgSha256::try_from_rng(&mut SysRng).unwrap()));
 
 fn main() {
     setup::do_setup();

@@ -14,6 +14,7 @@ libcrux-curve25519.workspace = true
 libcrux-chacha20poly1305.workspace = true
 libcrux-ecdsa.workspace = true
 libcrux-ed25519 = {workspace = true, features = ["rand"]}
+libcrux-hmac-drbg = {features = ["rand"], workspace = true}
 libcrux-hkdf.workspace = true
 libcrux-ml-kem.workspace=true
 libcrux-ml-kem.default-features=true
@@ -25,5 +26,4 @@ pkcs8 = { git = "https://github.com/kraemv/formats", rev = "c2da52f7", features 
 pki-types = { package = "rustls-pki-types", version = "1" }
 x509-cert = { git = "https://github.com/kraemv/formats", rev = "c2da52f7", default-features = false }
 
-rand = { version = "0.9" }
-rand_chacha = "0.9.0"
+rand = { version = "0.10" }

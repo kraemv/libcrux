@@ -9,8 +9,10 @@ use libcrux_agent::kx::SharedKey;
 use libcrux_ml_kem;
 use libcrux_ml_kem::mlkem768::{self, MlKem768Ciphertext, MlKem768PrivateKey};
 
-use rand::{RngCore, SeedableRng};
-use rand_chacha::ChaChaRng;
+use rand::{SeedableRng, Rng};
+use rand::rngs::SysRng;
+use rand::rand_core::UnwrapErr;
+use libcrux_hmac_drbg::HmacDrbgSha256;
 
 /// KEM Errors
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -132,7 +134,7 @@ impl DecapsKey for MlKem768PrivateKey {
     const SCHEME: KemScheme = KemScheme::MlKem768;
 
     fn keygen() -> Result<(Self, Self::PublicKey), Error> {
-        let mut rng = ChaChaRng::from_os_rng();
+        let mut rng = UnwrapErr(HmacDrbgSha256::try_from_rng(&mut SysRng).map_err(|_| Error::Internal("RNG init failed".into()))?);
         let mut rand = [0u8; libcrux_ml_kem::KEY_GENERATION_SEED_SIZE];
         rng.fill_bytes(&mut rand);
         let (sk, pk) = mlkem768::generate_key_pair(rand).into_parts();
@@ -150,7 +152,7 @@ impl EncapsKey for MlKem768PublicKey<Lib> {
     const SCHEME: KemScheme = KemScheme::MlKem768;
 
     fn encaps(&self) -> Result<(SharedKey, MlKem768Ciphertext), Error> {
-        let mut rng = ChaChaRng::from_os_rng();
+        let mut rng = UnwrapErr(HmacDrbgSha256::try_from_rng(&mut SysRng).map_err(|_| Error::Internal("RNG init failed".into()))?);
         let mut rand = [0u8; libcrux_ml_kem::SHARED_SECRET_SIZE];
         rng.fill_bytes(&mut rand);
         let (ct, shk) = mlkem768::encapsulate(&self.inner, rand);

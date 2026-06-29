@@ -6,6 +6,7 @@ use libcrux_agent::hkdf_messages::*;
 use libcrux_agent::hmac::Sha2_256HMAC;
 use libcrux_agent::kex_messages::*;
 use libcrux_agent::messages::{IPCRequest, IPCResponse, MessageKind};
+use libcrux_agent::rng_messages::EntropyRequest;
 use libcrux_agent::signatures::{EcDsaP256SHA256, Ed25519};
 use libcrux_agent::signing_messages::*;
 use libcrux_agent::hmac_messages::*;
@@ -28,6 +29,11 @@ pub(crate) fn handle_request(request: &mut IPCRequest) -> Result<IPCResponse, Er
         MessageKind::Ed25519Sign => {
             let request = SignRequest::<Ed25519>::try_from(request.get_payload())?;
             handle_ed25519_sign_request(&request)
+        }
+
+        MessageKind::Entropy => {
+            let request = EntropyRequest::from(request.get_payload());
+            handle_entropy_request(&request)
         }
 
         MessageKind::Error => {
@@ -123,6 +129,13 @@ pub(crate) fn handle_ed25519_sign_request(
 ) -> Result<IPCResponse, Error> {
     ed25519_sign_for_id(request.get_id(), request.get_payload())
         .map(|sig| IPCResponse::from(SignResponse::<Ed25519>::from(sig)))
+}
+
+pub(crate) fn handle_entropy_request(
+    request: &EntropyRequest,
+) -> Result<IPCResponse, Error> {
+    add_entropy(request.as_ref())
+        .map(|()| IPCResponse::entropy())
 }
 
 pub(crate) fn handle_x25519_key_gen() -> Result<IPCResponse, Error> {

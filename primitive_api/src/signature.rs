@@ -22,7 +22,9 @@ use pki_types::PrivatePkcs8KeyDer;
 use x509_cert::attr::Attribute;
 
 use rand::SeedableRng;
-use rand_chacha::ChaChaRng;
+use rand::rngs::SysRng;
+use rand::rand_core::UnwrapErr;
+use libcrux_hmac_drbg::HmacDrbgSha256;
 
 pub type DefaultSigningKey = Ed25519SigningKey;
 
@@ -196,7 +198,7 @@ impl SigningKey for Ed25519SigningKey {
     const SCHEME: SignatureScheme = SignatureScheme::Ed25519;
 
     fn keygen() -> Result<(Self, Self::PublicKey), Error> {
-        let mut rng = ChaChaRng::from_os_rng();
+        let mut rng = UnwrapErr(HmacDrbgSha256::try_from_rng(&mut SysRng).map_err(|_| Error::InternalError("RNG init failed".into()))?);
         ed25519::generate_key_pair(&mut rng)
             .map(|(sk, vk)| (sk, Ed25519PublicKey::new(vk)))
             .map(|(sk, vk)| (Ed25519SigningKey{sk, vk: vk.clone()}, vk))

@@ -5,6 +5,7 @@ use crate::hmac::{HmacSha256Mac, Sha2_256HMAC};
 use crate::hmac_messages::{HmacRequest, HmacResponse};
 use crate::ipc::IpcMessage;
 use crate::kex_messages::*;
+use crate::rng_messages::EntropyRequest;
 use crate::signatures::{EcDsaP256PublicKey, EcDsaP256SHA256, Ed25519, Ed25519PublicKey, SHA256};
 use crate::signing_messages::*;
 use crate::Error;
@@ -21,6 +22,7 @@ pub enum MessageKind {
     ChaCha20Poly1305Encrypt,
     EcDsaP256Sign,
     Ed25519Sign,
+    Entropy,
     Error,
     Export,
     HkdfExtractPublic,
@@ -64,6 +66,10 @@ impl IpcMessage<MessageKind> {
     pub fn mlkem768_keygen() -> Self {
         Self::no_payload(MessageKind::MlKem768KeyGen)
     }
+
+    pub fn entropy() -> Self {
+        Self::no_payload(MessageKind::Entropy)
+    }
 }
 
 impl IpcMessage<SetupMessageKind> {
@@ -78,6 +84,12 @@ impl IpcMessage<SetupMessageKind> {
 // Each impl is a single call to IpcMessage::new(kind, payload); the
 // serialization detail lives in the domain type itself.
 // ---------------------------------------------------------------------------
+
+impl From<EntropyRequest<'_>> for IPCRequest {
+    fn from(msg: EntropyRequest) -> Self {
+        Self::new(MessageKind::Entropy, msg.as_ref().to_vec())
+    }
+}
 
 impl From<ExportNonceRequest> for IPCRequest {
     fn from(msg: ExportNonceRequest) -> Self {

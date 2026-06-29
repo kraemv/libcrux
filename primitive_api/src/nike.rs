@@ -8,8 +8,10 @@ use libcrux_agent::kx::{SharedKey, X25519PublicKey, X25519SecretKey};
 use libcrux_curve25519 as curve25519;
 use libcrux_curve25519::ecdh_api::EcdhOwned;
 
-use rand::{RngCore, SeedableRng};
-use rand_chacha::ChaChaRng;
+use rand::{SeedableRng, Rng};
+use rand::rngs::SysRng;
+use rand::rand_core::UnwrapErr;
+use libcrux_hmac_drbg::HmacDrbgSha256;
 
 /// NIKE Errors
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,7 +89,7 @@ impl NIKESecretKey for X25519SecretKey {
     const SCHEME: NIKEScheme = NIKEScheme::X25519;
 
     fn keygen() -> Result<(Self, Self::PublicKey), Error> {
-        let mut rng = ChaChaRng::from_os_rng();
+        let mut rng = UnwrapErr(HmacDrbgSha256::try_from_rng(&mut SysRng).map_err(|_| Error::Internal("RNG init failed".into()))?);
         let mut rand = [0u8; 32];
         rng.fill_bytes(&mut rand);
         let (pub_key, priv_key) =

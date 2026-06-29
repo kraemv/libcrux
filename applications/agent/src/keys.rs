@@ -7,17 +7,27 @@ use libcrux_agent::signatures::{EcDsaP256Signature, Ed25519Signature, SHA256};
 
 use libcrux_ml_kem::mlkem768;
 use rand::CryptoRng;
+use rand::rand_core::UnwrapErr;
 use std::sync::LazyLock;
 
 static KEY_STORE: LazyLock<KeyStore> =
     LazyLock::new(|| KeyStore::from_disk().expect("Failed to load agent"));
 
 static EPHEMERAL_KEY_STORE: LazyLock<KeyStore> = LazyLock::new(|| {
-    KeyStore::new(&mut RNG.write().unwrap()).expect("Failed to initialize KeyStore")
+    KeyStore::new( &mut UnwrapErr(RNG.write().unwrap())).expect("Failed to initialize KeyStore")
 });
 
 fn get_rng() -> Result<impl CryptoRng, Error> {
-    RNG.write().map_err(|_| Error::RNG)
+    let rng = RNG.write()
+        .map_err(|_| Error::RNG)?;
+    Ok(UnwrapErr(rng))
+}
+
+pub fn add_entropy(entropy: &[u8]) -> Result<(), Error>{
+    RNG.write()
+        .map_err(|_| Error::RNG)?
+        .reseed(entropy, &[])
+        .map_err(|_| Error::RNG)
 }
 
 pub fn ecdsa_p256_sign_for_id(id: &ID, message: &[u8]) -> Result<EcDsaP256Signature<SHA256>, Error> {
