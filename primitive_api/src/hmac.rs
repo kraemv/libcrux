@@ -40,19 +40,16 @@ pub type DefaultHmacKey = HmacSha256Key;
 /// ```
 pub trait AuthenticationKey: Send + Sync + for <'a> TryFrom<&'a[u8]>{
     type Tag: Eq + NetworkObject;
+    const SCHEME: MacAlgorithm;
 
     fn authenticate(&self, msg: &[u8]) -> Result<Self::Tag, Error>;
 
-    fn verify(&self, msg: &[u8], tag: Self::Tag) -> Result<(), Error> {
-        let new_tag = self.authenticate(msg).map_err(|_| Error::Internal("Agent signing failed".into()))?;
-        (new_tag == tag).then_some(()).ok_or(Error::InvalidTag)
-    }
-
-    fn scheme() -> MacAlgorithm;
+    fn verify(&self, msg: &[u8], tag: &Self::Tag) -> Result<(), Error>;
 }
 
 impl AuthenticationKey for KeyID<Sha2_256HMAC> {
     type Tag = HmacSha256Mac;
+    const SCHEME: MacAlgorithm = MacAlgorithm::HmacSha2_256;
 
     fn authenticate(&self, msg: &[u8]) -> Result<Self::Tag, Error> {
         get_agent()
@@ -61,20 +58,23 @@ impl AuthenticationKey for KeyID<Sha2_256HMAC> {
             .map_err(|_| Error::Internal("Agent signing failed".into()))
     }
 
-    fn scheme() -> MacAlgorithm {
-        MacAlgorithm::HmacSha2_256
+    fn verify(&self, msg: &[u8], tag: &Self::Tag) -> Result<(), Error> {
+        let new_tag = self.authenticate(msg).map_err(|_| Error::Internal("Agent signing failed".into()))?;
+        (&new_tag == tag).then_some(()).ok_or(Error::InvalidTag)
     }
 }
 
 impl AuthenticationKey for HmacSha256Key {
     type Tag = HmacSha256Mac;
+    const SCHEME: MacAlgorithm = MacAlgorithm::HmacSha2_256;
 
     fn authenticate(&self, msg: &[u8]) -> Result<Self::Tag, Error> {
         Ok(self.authenticate_msg(msg))
     }
 
-    fn scheme() -> MacAlgorithm {
-        MacAlgorithm::HmacSha2_256
+    fn verify(&self, msg: &[u8], tag: &Self::Tag) -> Result<(), Error> {
+        let new_tag = self.authenticate(msg).map_err(|_| Error::Internal("Agent signing failed".into()))?;
+        (&new_tag == tag).then_some(()).ok_or(Error::InvalidTag)
     }
 }
 
