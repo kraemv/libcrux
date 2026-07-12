@@ -114,7 +114,7 @@ pub trait VerificationKey: NetworkObject{
     const SCHEME: SignatureScheme;
 
     // Check if the signature is valid for the given payload and key
-    fn verify(&self, payload: &[u8], signature: Self::Signature) -> Result<(), Error>;
+    fn verify(&self, payload: &[u8], signature: &Self::Signature) -> Result<(), Error>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -311,7 +311,7 @@ impl VerificationKey for Ed25519PublicKey {
     type Signature = libcrux_agent::signatures::Ed25519Signature;
     const SCHEME: SignatureScheme = SignatureScheme::Ed25519;
 
-    fn verify(&self, payload: &[u8], signature: Self::Signature) -> Result<(), Error> {
+    fn verify(&self, payload: &[u8], signature: &Self::Signature) -> Result<(), Error> {
         ed25519::verify(payload, &self.into_bytes(), signature.get_signature())
             .map_err(Error::from)
     }
@@ -321,7 +321,7 @@ impl VerificationKey for EcDsaP256PublicKey::<SHA256> {
     type Signature = libcrux_agent::signatures::EcDsaP256Signature::<SHA256>;
     const SCHEME: SignatureScheme = SignatureScheme::EcDsaP256(DigestAlgorithm::Sha256);
 
-    fn verify(&self, payload: &[u8], signature: Self::Signature) -> Result<(), Error> {
+    fn verify(&self, payload: &[u8], signature: &Self::Signature) -> Result<(), Error> {
         p256::verify(DigestAlgorithm::Sha256, payload, &signature.get_signature(), self.get_key())
             .map_err(Error::from)
     }
