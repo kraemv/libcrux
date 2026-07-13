@@ -48,11 +48,6 @@ pub(crate) enum SecretKey {
     RandomBytes(RandomBytes),
 }
 
-pub enum PublicKey {
-    EcDsaP256Key(EcDsaP256PublicKey<SHA256>),
-    Ed25519Key(Ed25519PublicKey),
-}
-
 pub struct KeyStoreEntry {
     id: ID,
     key: SecretKey,
@@ -195,7 +190,7 @@ impl KeyStore {
                     let ecdsa_key = EcDsaP256PrivateKey::<SHA256>::from(private_key);
                     store
                         .ecdsa_p256_add_key(ecdsa_key)
-                        .map(|(id, key)| (id, PublicKey::EcDsaP256Key(key)))
+                        .map(|(id, _)| id)
                 }
                 b"ED_25519" => {
                     let secret_scalar: [u8; 32] = key_bytes
@@ -206,7 +201,7 @@ impl KeyStore {
                         Ed25519PrivateKey::new(ed25519::SigningKey::from_bytes(secret_scalar));
                     store
                         .ed25519_add_key(private_key)
-                        .map(|(id, key)| (id, PublicKey::Ed25519Key(key)))
+                        .map(|(id, _)| id)
                 }
                 _ => return Err(Error::Unsupported),
             };

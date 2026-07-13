@@ -36,7 +36,6 @@ members = [
     "applications/agent",
     "applications/agent_lib",
     "applications/agent-setup",
-    "applications/application_lib",
     "benchmarks",
     "crates/algorithms/aes",
     "crates/algorithms/blake2",
@@ -97,7 +96,6 @@ allow-branch = ["main"]
 
 [workspace.dependencies]
 libcrux-agent = {path = "applications/agent_lib"}
-libcrux-agent-application = {path = "applications/application_lib"}
 hax-lib = { version = "=0.3.6" }
 libcrux-aead = { version = "=0.0.8", path = "crates/primitives/aead" }
 libcrux-aes = { version = "=0.0.8", path = "crates/algorithms/aes" }
@@ -214,7 +212,6 @@ hpke-rs = { version = "0.6", features = ["libcrux"] }
 
 # Agent
 libcrux-agent.workspace = true
-libcrux-agent-application.workspace = true
 libcrux-primitive-api.workspace = true
 
 # Primitives
