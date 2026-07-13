@@ -155,9 +155,7 @@ pub(crate) fn handle_x25519_derive(request: &X25519DeriveRequest) -> Result<IPCR
 pub(crate) fn handle_mlkem768_decaps(
     request: &MlKem768DecapsRequest,
 ) -> Result<IPCResponse, Error> {
-    let ct =
-        libcrux_ml_kem::mlkem768::MlKem768Ciphertext::from(request.get_ciphertext().as_bytes());
-    mlkem_768_decaps_for_id(request.get_id(), ct)
+    mlkem_768_decaps_for_id(request.get_id(), request.get_ciphertext())
         .map(|shk| IPCResponse::from(MlKem768DecapsResponse::new(shk)))
 }
 

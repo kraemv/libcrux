@@ -9,18 +9,10 @@ repository.workspace = true
 readme.workspace = true
 
 [dependencies]
-ipc-channel = "0.21.0"
-rand = { version = "0.10" }
-
 libcrux-agent.workspace = true
-libcrux-chacha20poly1305.workspace = true
-libcrux-curve25519.workspace = true
-libcrux-ecdsa.workspace = true
-libcrux-ed25519.workspace = true
 libcrux-hmac-drbg = {features = ["rand"], workspace = true}
-libcrux-ml-kem.workspace=true
-libcrux-ml-kem.default-features=true
-libcrux-kmac.workspace = true
-libcrux-sha2.workspace = true
+
+ipc-channel = "0.21.0"
 libc = "0.2.183"
+rand = { version = "0.10" }
 zerocopy = {version="0.8.47", features = ["derive", "std"]}

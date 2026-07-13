@@ -5,7 +5,6 @@ use libcrux_agent::aead::{CHACHA_NONCE_LEN, CHACHA_TAG_LEN};
 use libcrux_agent::kx::{MlKem768Ciphertext, MlKem768PublicKey, X25519PublicKey};
 use libcrux_agent::signatures::{EcDsaP256Signature, Ed25519Signature, SHA256};
 
-use libcrux_ml_kem::mlkem768;
 use rand::CryptoRng;
 use rand::rand_core::UnwrapErr;
 use std::sync::LazyLock;
@@ -58,8 +57,8 @@ pub fn x25519_derive_for_key_id(id: &ID, pk: &X25519PublicKey) -> Result<ID, Err
     EPHEMERAL_KEY_STORE.x25519_derive_for_id(id, pk)
 }
 
-pub fn mlkem_768_decaps_for_id(id: &ID, ct: mlkem768::MlKem768Ciphertext) -> Result<ID, Error> {
-    EPHEMERAL_KEY_STORE.mlkem_768_decaps_for_id(id, ct)
+pub fn mlkem_768_decaps_for_id(id: &ID, ct: &MlKem768Ciphertext) -> Result<ID, Error> {
+    EPHEMERAL_KEY_STORE.mlkem_768_decaps_for_id(id, ct.into())
 }
 
 pub fn mlkem_768_encaps_for_id(

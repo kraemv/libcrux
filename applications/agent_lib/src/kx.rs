@@ -106,6 +106,12 @@ impl From<[u8; 1088]> for MlKem768Ciphertext {
     }
 }
 
+impl From<&MlKem768Ciphertext> for mlkem768::MlKem768Ciphertext {
+    fn from(ct: &MlKem768Ciphertext) -> Self {
+        libcrux_ml_kem::mlkem768::MlKem768Ciphertext::from(ct.as_bytes())
+    }
+}
+
 impl From<[u8; 32]> for X25519PublicKey {
     fn from(bytes: [u8; 32]) -> Self {
         Self(bytes)
