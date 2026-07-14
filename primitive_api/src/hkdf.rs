@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use libcrux_agent::hkdf::PseudorandomKey;
+use libcrux_agent::hkdf::HkdfSha256PRK;
 use libcrux_agent::kx::SharedKey;
 use libcrux_hkdf;
 use libcrux_sha2::{Sha256, SHA256_LENGTH};
@@ -140,7 +140,7 @@ impl SaltedRandomnessExtractor for Sha256SaltedHKDF<AgentLib> {
         let mut prk = [0u8; 32];
         let ikm = [0u8; SHA256_LENGTH];
         libcrux_hkdf::sha2_256::extract(&mut prk, &self.0, &ikm)
-            .map(|()| PseudorandomKey::new(prk))
+            .map(|()| HkdfSha256PRK::new(prk))
             .map_err(|_| Error::Extract)
     }
 
@@ -155,20 +155,20 @@ impl SaltedRandomnessExtractor for Sha256SaltedHKDF<AgentLib> {
 
 impl SaltedRandomnessExtractor for Sha256SaltedHKDF<Lib> {
     type Key = SharedKey;
-    type Prk = PseudorandomKey;
+    type Prk = HkdfSha256PRK;
 
     fn extract_without_key(self) -> Result<impl HKDFKey, Error> {
         let mut prk = [0u8; 32];
         let ikm = [0u8; SHA256_LENGTH];
         libcrux_hkdf::sha2_256::extract(&mut prk, &self.0, &ikm)
-            .map(|()| PseudorandomKey::new(prk))
+            .map(|()| HkdfSha256PRK::new(prk))
             .map_err(|_| Error::Extract)
     }
 
     fn extract_with_key(self, key: Self::Key) -> Result<Self::Prk, Error> {
         let mut prk = [0u8; 32];
         libcrux_hkdf::sha2_256::extract(&mut prk, &self.0, key.as_ref())
-            .map(|()| PseudorandomKey::new(prk))
+            .map(|()| HkdfSha256PRK::new(prk))
             .map_err(|_| Error::Extract)
     }
 }
@@ -214,7 +214,7 @@ impl HKDFKey for KeyID<Sha256> {
     }
 }
 
-impl HKDFKey for PseudorandomKey {
+impl HKDFKey for HkdfSha256PRK {
     const N: usize = SHA256_LENGTH;
     type Okm = RandomKey;
 

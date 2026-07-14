@@ -7,22 +7,22 @@ use libcrux_hkdf as hkdf;
 pub(crate) const SHA2_256_LEN: usize = hkdf::Algorithm::hash_len(hkdf::Algorithm::Sha256);
 
 #[derive(Clone)]
-pub struct PseudorandomKey ([u8; 32]);
+pub struct HkdfSha256PRK ([u8; 32]);
 #[derive(Clone)]
 pub struct RandomBytes (InnerRndBytes);
 
 impl SharedKey {
 
-    pub fn sha2_256_hkdf_extract(&self, salt: Option<&[u8]>) -> Result<PseudorandomKey, Error> {
+    pub fn sha2_256_hkdf_extract(&self, salt: Option<&[u8]>) -> Result<HkdfSha256PRK, Error> {
         let salt = salt.unwrap_or(&[0u8; SHA2_256_LEN]);
         let mut prk = [0u8; 32];
         hkdf::Hkdf::<hkdf::Sha2_256>::extract_arrayref(&mut prk, salt, self.as_ref())
-            .map(|_| PseudorandomKey(prk))
+            .map(|_| HkdfSha256PRK(prk))
             .map_err(|_| Error::HKDF)
     }
 }
 
-impl PseudorandomKey {
+impl HkdfSha256PRK {
     pub fn new(key: [u8; 32]) -> Self {
         Self(key)
     }
@@ -47,7 +47,7 @@ impl RandomBytes {
     }
 }
 
-impl AsRef<[u8; 32]> for PseudorandomKey {
+impl AsRef<[u8; 32]> for HkdfSha256PRK {
     fn as_ref(&self) -> &[u8; 32] {
         &self.0
     }
@@ -59,7 +59,7 @@ impl AsRef<[u8]> for RandomBytes {
     }
 }
 
-impl TryFrom<&[u8]> for PseudorandomKey {
+impl TryFrom<&[u8]> for HkdfSha256PRK {
     type Error = Error;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
