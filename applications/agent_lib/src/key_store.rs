@@ -54,11 +54,6 @@ pub enum LongTermKey {
     Ed25519Key(Ed25519PrivateKey),
 }
 
-pub struct KeyStoreEntry<KeyType> {
-    id: ID,
-    key: KeyType,
-}
-
 impl EphemeralKey {
     pub(crate) fn set_hkdf_salt(&mut self) -> Option<Self> {
         match &self {
@@ -119,28 +114,14 @@ impl EphemeralKey {
     }
 }
 
-impl<KeyType> KeyStoreEntry<KeyType> {
-    fn new(id: ID, key: KeyType) -> Self {
-        Self { id, key }
-    }
-
-    fn get_key(&self) -> &KeyType {
-        &self.key
-    }
-
-    fn get_mut_key(&mut self) -> &mut KeyType {
-        &mut self.key
-    }
-}
-
 pub struct KeyStore<KeyType> {
     root_key: [u8; 32],
-    entries: RwLock<HashMap<ID, KeyStoreEntry<KeyType>>>,
+    entries: RwLock<HashMap<ID, KeyType>>,
 }
 
 impl <KeyType> KeyStore<KeyType> {
-    fn add_entry(&self, entry: KeyStoreEntry<KeyType>) {
-        self.entries.write().unwrap().insert(entry.id.clone(), entry);
+    fn add_key(&self, id: ID, entry: KeyType) {
+        self.entries.write().unwrap().insert(id, entry);
     }
 
     fn get_tag(&self, bytes: &[u8], customization: &[u8]) -> Result<ID, Error> {
@@ -163,9 +144,9 @@ impl KeyStore<EphemeralKey> {
         let mut entries = self.entries.write().map_err(|_| Error::Sync)?;
         match entries.entry(id.clone()) {
             Entry::Occupied(mut entry) => {
-                let entry = entry.get_mut();
-                entry.get_mut_key().set_chacha20poly1305_key().ok_or(Error::Unsupported)?;
-                match entry.get_key() {
+                let key = entry.get_mut();
+                key.set_chacha20poly1305_key().ok_or(Error::Unsupported)?;
+                match key {
                     EphemeralKey::ChaCha20Poly1305Key(key) => {
                         key.decrypt(plaintext, nonce.into(), aad, ciphertext, tag.into()).map_err(|_| Error::AEAD)?;
                         Ok(plaintext)
@@ -181,10 +162,10 @@ impl KeyStore<EphemeralKey> {
         let mut entries = self.entries.write().map_err(|_| Error::Sync)?;
         match entries.entry(id.clone()) {
             Entry::Occupied(mut entry) => {
-                let entry = entry.get_mut();
-                entry.get_mut_key().set_chacha20poly1305_key().ok_or(Error::Unsupported)?;
+                let key = entry.get_mut();
+                key.set_chacha20poly1305_key().ok_or(Error::Unsupported)?;
                 let mut tag = chacha20::Tag::from([0u8; chacha20::TAG_LEN]);
-                match entry.get_key() {
+                match key {
                     EphemeralKey::ChaCha20Poly1305Key(key) => {
                         key.encrypt(ciphertext, &mut tag, nonce.into(), aad, plaintext).map_err(|_| Error::AEAD)?;
                         Ok((ciphertext, *tag.as_ref()))
@@ -199,14 +180,13 @@ impl KeyStore<EphemeralKey> {
     pub fn x25519_derive_for_id(&self, id: &ID, pk: &X25519PublicKey) -> Result<ID, Error> {
         let shared_key = {
             let entries = self.entries.read().map_err(|_| Error::Sync)?;
-            match entries.get(id).ok_or(Error::UnknownID)?.get_key() {
+            match entries.get(id).ok_or(Error::UnknownID)? {
                 EphemeralKey::X25519Key(key) => key.derive(pk),
                 _ => Err(Error::Unsupported),
             }?
         };
         let id = self.get_tag(shared_key.as_ref(), SHARED_KEY_LABEL)?;
-        let entry = KeyStoreEntry::new(id.clone(), EphemeralKey::SharedSecret(shared_key));
-        self.add_entry(entry);
+        self.add_key(id.clone(), EphemeralKey::SharedSecret(shared_key));
 
         Ok(id)
     }
@@ -218,15 +198,14 @@ impl KeyStore<EphemeralKey> {
     ) -> Result<ID, Error> {
         let shared_key = {
             let entries = self.entries.read().map_err(|_| Error::Sync)?;
-            match entries.get(id).ok_or(Error::UnknownID)?.get_key() {
+            match entries.get(id).ok_or(Error::UnknownID)? {
                 EphemeralKey::MlKem768Key(key) => Ok(SharedKey::new(mlkem768::decapsulate(key, &ct))),
                 _ => Err(Error::Unsupported),
             }?
         };
 
         let id = self.get_tag(shared_key.as_ref(), SHARED_KEY_LABEL)?;
-        let entry = KeyStoreEntry::new(id.clone(), EphemeralKey::SharedSecret(shared_key));
-        self.add_entry(entry);
+        self.add_key(id.clone(), EphemeralKey::SharedSecret(shared_key));
 
         Ok(id)
     }
@@ -238,8 +217,7 @@ impl KeyStore<EphemeralKey> {
     ) -> Result<(ID, MlKem768Ciphertext), Error> {
         let (ct, shared_key) = pk.encaps(rng);
         let id = self.get_tag(shared_key.as_ref(), SHARED_KEY_LABEL)?;
-        let entry = KeyStoreEntry::new(id.clone(), EphemeralKey::SharedSecret(shared_key));
-        self.add_entry(entry);
+        self.add_key(id.clone(), EphemeralKey::SharedSecret(shared_key));
 
         Ok((id, ct))
     }
@@ -255,8 +233,7 @@ impl KeyStore<EphemeralKey> {
         let id = self.get_tag(sk.as_slice(), MLKEM_768_LABEL)?;
         let key = EphemeralKey::MlKem768Key(Arc::new(sk));
         let pk = MlKem768PublicKey::new(pk.into());
-        let entry = KeyStoreEntry { id: id.clone(), key };
-        self.add_entry(entry);
+        self.add_key(id.clone(), key);
 
         Ok((id, pk))
     }
@@ -273,8 +250,7 @@ impl KeyStore<EphemeralKey> {
         let id = self.get_tag(&priv_key, X25519_LABEL)?;
         let key = EphemeralKey::X25519Key(X25519SecretKey::new(priv_key));
         let pk = X25519PublicKey::new(pub_key);
-        let entry = KeyStoreEntry { id: id.clone(), key };
-        self.add_entry(entry);
+        self.add_key(id.clone(), key);
 
         Ok((id, pk))
     }
@@ -288,15 +264,14 @@ impl KeyStore<EphemeralKey> {
                 entries.remove(id).ok_or(Error::UnknownID)?
         };
 
-        let pseudorandom_key = match entry.get_key() {
+        let pseudorandom_key = match entry {
             EphemeralKey::SharedSecret(key) => key.sha2_256_hkdf_extract(Some(salt)),
             _ => Err(Error::Unsupported),
         }?;
 
         let id = self.get_tag(pseudorandom_key.as_ref(), PRK_LABEL)?;
         let key = EphemeralKey::PseudorandomKey(pseudorandom_key);
-        let entry = KeyStoreEntry { id: id.clone(), key };
-        self.add_entry(entry);
+        self.add_key(id.clone(), key);
 
         Ok(id)
     }
@@ -306,19 +281,14 @@ impl KeyStore<EphemeralKey> {
             let mut entries = self.entries.write().map_err(|_| Error::Sync)?;
 
             let key_entry = match id {
-                Some(id) => {
-                    entries.remove(id).ok_or(Error::UnknownID)?
-                }
-                None => {
-                    let default_key = EphemeralKey::SharedSecret(SharedKey::new([0u8; 32]));
-                    KeyStoreEntry::new(ID::from([0u8; 31]), default_key)
-                }
+                Some(id) => entries.remove(id).ok_or(Error::UnknownID)?,
+                None => EphemeralKey::SharedSecret(SharedKey::new([0u8; 32])),
             };
             
             let salt_entry = match entries.entry(salt.clone()) {
                 Entry::Occupied(mut entry) => {
                     let entry = entry.get_mut();
-                    entry.get_mut_key().set_hkdf_salt().ok_or(Error::Unsupported)
+                    entry.set_hkdf_salt().ok_or(Error::Unsupported)
                 }
                 Entry::Vacant(_) => Err(Error::UnknownID),
             }?;
@@ -327,7 +297,7 @@ impl KeyStore<EphemeralKey> {
         };
 
         
-        let pseudorandom_key = match (key_entry.get_key(), salt_value) {
+        let pseudorandom_key = match (key_entry, salt_value) {
             (EphemeralKey::SharedSecret(key), EphemeralKey::HkdfSalt(salt)) | 
             (EphemeralKey::SharedSecret(key), EphemeralKey::RandomBytes(salt)) => key.sha2_256_hkdf_extract(Some(salt.as_ref())),
             _ => Err(Error::Unsupported),
@@ -336,8 +306,7 @@ impl KeyStore<EphemeralKey> {
 
         let id = self.get_tag(pseudorandom_key.as_ref(), PRK_LABEL)?;
         let key = EphemeralKey::PseudorandomKey(pseudorandom_key);
-        let entry = KeyStoreEntry::new(id.clone(), key );
-        self.add_entry(entry);
+        self.add_key(id.clone(), key);
 
         Ok(id)
     }
@@ -347,9 +316,9 @@ impl KeyStore<EphemeralKey> {
             let mut entries = self.entries.write().map_err(|_| Error::Sync)?;
             match entries.entry(id.clone()) {
                 Entry::Occupied(mut entry) => {
-                    let entry = entry.get_mut();
-                    entry.get_mut_key().set_prk().ok_or(Error::Unsupported)?;
-                    match entry.get_key() {
+                    let key = entry.get_mut();
+                    key.set_prk().ok_or(Error::Unsupported)?;
+                    match key {
                         EphemeralKey::PseudorandomKey(key) => key.sha2_256_hkdf_expand(info, output_len),
                         _ => Err(Error::Unsupported),
                     }
@@ -360,18 +329,17 @@ impl KeyStore<EphemeralKey> {
 
         let id = self.get_tag(okm.as_ref(), RANDOM_BYTES_LABEL)?;
         let key = EphemeralKey::RandomBytes(okm);
-        let entry = KeyStoreEntry { id: id.clone(), key };
-        self.add_entry(entry);
+        self.add_key(id.clone(), key);
 
         Ok(id)
     }
 
     pub fn export_nonce(&self, id: &ID) -> Result<[u8; 12], Error> {
-        let entry = {
+        let key = {
                 let mut entries = self.entries.write().map_err(|_| Error::Sync)?;
                 entries.remove(id).ok_or(Error::UnknownID)?
         };
-        match entry.get_key() {
+        match key {
             EphemeralKey::RandomBytes(bytes) => Ok(bytes.as_ref().try_into().map_err(|_| Error::HKDF)?),
             _ => Err(Error::Unsupported),
         }
@@ -381,9 +349,9 @@ impl KeyStore<EphemeralKey> {
         let mut entries = self.entries.write().map_err(|_| Error::Sync)?;
         match entries.entry(id.clone()) {
             Entry::Occupied(mut entry) => {
-                let entry = entry.get_mut();
-                entry.get_mut_key().set_hmac256_key().ok_or(Error::Unsupported)?;
-                match entry.get_key() {
+                let key = entry.get_mut();
+                key.set_hmac256_key().ok_or(Error::Unsupported)?;
+                match key {
                     EphemeralKey::HMACKey(key) => Ok(key.authenticate_msg(message)),
                     _ => Err(Error::Unsupported),
                 }
@@ -474,7 +442,7 @@ impl KeyStore<LongTermKey> {
         rng: &mut impl CryptoRng,
     ) -> Result<EcDsaP256Signature<SHA256>, Error> {
         let entries = self.entries.read().map_err(|_| Error::Sync)?;
-        match entries.get(id).ok_or(Error::UnknownID)?.get_key() {
+        match entries.get(id).ok_or(Error::UnknownID)? {
             LongTermKey::EcDsaP256Key(key) => key.sign(message, rng),
             _ => Err(Error::Unsupported),
         }
@@ -482,7 +450,7 @@ impl KeyStore<LongTermKey> {
 
     pub fn ed25519_sign_for_id(&self, id: &ID, message: &[u8]) -> Result<Ed25519Signature, Error> {
         let entries = self.entries.read().map_err(|_| Error::Sync)?;
-        match entries.get(id).ok_or(Error::UnknownID)?.get_key() {
+        match entries.get(id).ok_or(Error::UnknownID)? {
             LongTermKey::Ed25519Key(key) => key.sign(message),
             _ => Err(Error::Unsupported),
         }
@@ -497,8 +465,7 @@ impl KeyStore<LongTermKey> {
         let pk = ecdsa::p256::secret_to_public(key.get_key()).map_err(|_| Error::PublicKey)?;
         let pk = EcDsaP256PublicKey::<SHA256>::from(pk);
 
-        let entry = KeyStoreEntry::new(id.clone(), LongTermKey::EcDsaP256Key(key));
-        self.add_entry(entry);
+        self.add_key(id.clone(), LongTermKey::EcDsaP256Key(key));
 
         Ok((id, pk))
     }
@@ -510,8 +477,7 @@ impl KeyStore<LongTermKey> {
 
         let pk = Ed25519PublicKey::new(ed25519::VerificationKey::from_bytes(pk));
 
-        let entry = KeyStoreEntry::new(id.clone(), LongTermKey::Ed25519Key(key));
-        self.add_entry(entry);
+        self.add_key(id.clone(), LongTermKey::Ed25519Key(key));
 
         Ok((id, pk))
     }
