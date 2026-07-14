@@ -1,5 +1,6 @@
 use crate::{Error, RNG};
 
+use libcrux_agent::key_store::{EphemeralKeyStore, LongTermKeyStore};
 use libcrux_agent::{ID, hmac::HmacSha256Mac, key_store::KeyStore};
 use libcrux_agent::aead::{CHACHA_NONCE_LEN, CHACHA_TAG_LEN};
 use libcrux_agent::kx::{MlKem768Ciphertext, MlKem768PublicKey, X25519PublicKey};
@@ -9,10 +10,10 @@ use rand::CryptoRng;
 use rand::rand_core::UnwrapErr;
 use std::sync::LazyLock;
 
-static KEY_STORE: LazyLock<KeyStore> =
+static KEY_STORE: LazyLock<LongTermKeyStore> =
     LazyLock::new(|| KeyStore::from_disk().expect("Failed to load agent"));
 
-static EPHEMERAL_KEY_STORE: LazyLock<KeyStore> = LazyLock::new(|| {
+static EPHEMERAL_KEY_STORE: LazyLock<EphemeralKeyStore> = LazyLock::new(|| {
     KeyStore::new( &mut UnwrapErr(RNG.write().unwrap())).expect("Failed to initialize KeyStore")
 });
 

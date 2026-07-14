@@ -35,10 +35,11 @@ const PRK_LABEL: &[u8; 15] = b"PseudorandomKey";
 const SHARED_KEY_LABEL: &[u8; 9] = b"SharedKey";
 const X25519_LABEL: &[u8; 9] = b"X25519Key";
 
-pub(crate) enum SecretKey {
+pub type EphemeralKeyStore = KeyStore<EphemeralKey>;
+pub type LongTermKeyStore = KeyStore<LongTermKey>;
+
+pub enum EphemeralKey {
     ChaCha20Poly1305Key(chacha20::Key),
-    EcDsaP256Key(EcDsaP256PrivateKey<SHA256>),
-    Ed25519Key(Ed25519PrivateKey),
     MlKem768Key(Arc<mlkem768::MlKem768PrivateKey>),
     X25519Key(X25519SecretKey),
     SharedSecret(SharedKey),
@@ -48,17 +49,22 @@ pub(crate) enum SecretKey {
     RandomBytes(RandomBytes),
 }
 
-pub struct KeyStoreEntry {
-    id: ID,
-    key: SecretKey,
+pub enum LongTermKey {
+    EcDsaP256Key(EcDsaP256PrivateKey<SHA256>),
+    Ed25519Key(Ed25519PrivateKey),
 }
 
-impl SecretKey {
+pub struct KeyStoreEntry<KeyType> {
+    id: ID,
+    key: KeyType,
+}
+
+impl EphemeralKey {
     pub(crate) fn set_hkdf_salt(&mut self) -> Option<Self> {
         match &self {
-            SecretKey::RandomBytes(bytes) |
-            SecretKey::HkdfSalt(bytes) => {
-                let salt_copy = SecretKey::HkdfSalt(bytes.clone());
+            EphemeralKey::RandomBytes(bytes) |
+            EphemeralKey::HkdfSalt(bytes) => {
+                let salt_copy = EphemeralKey::HkdfSalt(bytes.clone());
                 Some(mem::replace(self, salt_copy))
             },
             _ => None,
@@ -67,13 +73,13 @@ impl SecretKey {
 
     pub(crate) fn set_prk(&mut self) -> Option<Self> {
         match &self {
-            SecretKey::RandomBytes(bytes) => {
+            EphemeralKey::RandomBytes(bytes) => {
                 let bytes: [u8; 32] = bytes.as_ref().try_into().ok()?;
-                let key_copy = SecretKey::PseudorandomKey(PseudorandomKey::new(bytes));
+                let key_copy = EphemeralKey::PseudorandomKey(PseudorandomKey::new(bytes));
                 Some(mem::replace(self, key_copy))
             },
-            SecretKey::PseudorandomKey(bytes) => {
-                let key_copy = SecretKey::PseudorandomKey(bytes.clone());
+            EphemeralKey::PseudorandomKey(bytes) => {
+                let key_copy = EphemeralKey::PseudorandomKey(bytes.clone());
                 Some(mem::replace(self, key_copy))
             }
             _ => None,
@@ -82,12 +88,12 @@ impl SecretKey {
 
     pub(crate) fn set_hmac256_key(&mut self) -> Option<Self> {
         match &self {
-            SecretKey::RandomBytes(bytes) => {
-                let key_copy = SecretKey::HMACKey(bytes.into());
+            EphemeralKey::RandomBytes(bytes) => {
+                let key_copy = EphemeralKey::HMACKey(bytes.into());
                 Some(mem::replace(self, key_copy))
             },
-            SecretKey::HMACKey(bytes) => {
-                let key_copy = SecretKey::HMACKey(bytes.clone());
+            EphemeralKey::HMACKey(bytes) => {
+                let key_copy = EphemeralKey::HMACKey(bytes.clone());
                 Some(mem::replace(self, key_copy))
             },
             _ => None,
@@ -96,16 +102,16 @@ impl SecretKey {
 
     pub(crate) fn set_chacha20poly1305_key(&mut self) -> Option<Self> {
         match &self {
-            SecretKey::RandomBytes(bytes) => {
+            EphemeralKey::RandomBytes(bytes) => {
                 let bytes: [u8; chacha20::KEY_LEN] = bytes.as_ref().try_into().ok()?;
                 let key = chacha20::Key::from(bytes);
-                let key_copy = SecretKey::ChaCha20Poly1305Key(key);
+                let key_copy = EphemeralKey::ChaCha20Poly1305Key(key);
                 Some(mem::replace(self, key_copy))
             },
-            SecretKey::ChaCha20Poly1305Key(key) => {
+            EphemeralKey::ChaCha20Poly1305Key(key) => {
                 let bytes = *key.as_ref();
                 let key = chacha20::Key::from(bytes);
-                let key_copy = SecretKey::ChaCha20Poly1305Key(key);
+                let key_copy = EphemeralKey::ChaCha20Poly1305Key(key);
                 Some(mem::replace(self, key_copy))
             },
             _ => None,
@@ -113,33 +119,281 @@ impl SecretKey {
     }
 }
 
-impl KeyStoreEntry {
-    fn new(id: ID, key: SecretKey) -> Self {
+impl<KeyType> KeyStoreEntry<KeyType> {
+    fn new(id: ID, key: KeyType) -> Self {
         Self { id, key }
     }
 
-    fn get_key(&self) -> &SecretKey {
+    fn get_key(&self) -> &KeyType {
         &self.key
     }
 
-    fn get_mut_key(&mut self) -> &mut SecretKey {
+    fn get_mut_key(&mut self) -> &mut KeyType {
         &mut self.key
     }
 }
 
-pub struct KeyStore {
+pub struct KeyStore<KeyType> {
     root_key: [u8; 32],
-    entries: RwLock<HashMap<ID, KeyStoreEntry>>,
+    entries: RwLock<HashMap<ID, KeyStoreEntry<KeyType>>>,
 }
 
-impl KeyStore {
+impl <KeyType> KeyStore<KeyType> {
+    fn add_entry(&self, entry: KeyStoreEntry<KeyType>) {
+        self.entries.write().unwrap().insert(entry.id.clone(), entry);
+    }
+
+    fn get_tag(&self, bytes: &[u8], customization: &[u8]) -> Result<ID, Error> {
+        let mut tag = [0u8; ID_SIZE];
+        kmac::kmac_128(&mut tag, &self.root_key, bytes, customization)
+            .try_into()
+            .map_err(|_| Error::MAC)
+    }
+}
+
+impl KeyStore<EphemeralKey> {
     pub fn new(rng: &mut impl CryptoRng) -> Result<Self, Error> {
         let mut root_key = [0u8; 32];
         rng.fill_bytes(&mut root_key);
         let entries = RwLock::new(HashMap::new());
-        Ok(Self { root_key, entries })
+        Ok(Self { root_key, entries})
     }
 
+    pub fn chacha20poly1305_decrypt_for_id<'a>(&self, id: &ID, plaintext: &'a mut [u8], nonce: &[u8; chacha20::NONCE_LEN], tag: &[u8; chacha20::TAG_LEN], ciphertext: &[u8], aad: &[u8]) -> Result<&'a [u8], Error>{
+        let mut entries = self.entries.write().map_err(|_| Error::Sync)?;
+        match entries.entry(id.clone()) {
+            Entry::Occupied(mut entry) => {
+                let entry = entry.get_mut();
+                entry.get_mut_key().set_chacha20poly1305_key().ok_or(Error::Unsupported)?;
+                match entry.get_key() {
+                    EphemeralKey::ChaCha20Poly1305Key(key) => {
+                        key.decrypt(plaintext, nonce.into(), aad, ciphertext, tag.into()).map_err(|_| Error::AEAD)?;
+                        Ok(plaintext)
+                    }
+                    _ => Err(Error::Unsupported),
+                }
+            }
+            Entry::Vacant(_) => Err(Error::UnknownID),
+        }
+    }
+    
+    pub fn chacha20poly1305_encrypt_for_id<'a>(&self, id: &ID, ciphertext: &'a mut [u8], nonce: &[u8; chacha20::NONCE_LEN], plaintext: &[u8], aad: &[u8]) -> Result<(&'a [u8], [u8; chacha20::TAG_LEN]), Error>{
+        let mut entries = self.entries.write().map_err(|_| Error::Sync)?;
+        match entries.entry(id.clone()) {
+            Entry::Occupied(mut entry) => {
+                let entry = entry.get_mut();
+                entry.get_mut_key().set_chacha20poly1305_key().ok_or(Error::Unsupported)?;
+                let mut tag = chacha20::Tag::from([0u8; chacha20::TAG_LEN]);
+                match entry.get_key() {
+                    EphemeralKey::ChaCha20Poly1305Key(key) => {
+                        key.encrypt(ciphertext, &mut tag, nonce.into(), aad, plaintext).map_err(|_| Error::AEAD)?;
+                        Ok((ciphertext, *tag.as_ref()))
+                    }
+                    _ => Err(Error::Unsupported),
+                }
+            }
+            Entry::Vacant(_) => Err(Error::UnknownID),
+        }
+    }
+
+    pub fn x25519_derive_for_id(&self, id: &ID, pk: &X25519PublicKey) -> Result<ID, Error> {
+        let shared_key = {
+            let entries = self.entries.read().map_err(|_| Error::Sync)?;
+            match entries.get(id).ok_or(Error::UnknownID)?.get_key() {
+                EphemeralKey::X25519Key(key) => key.derive(pk),
+                _ => Err(Error::Unsupported),
+            }?
+        };
+        let id = self.get_tag(shared_key.as_ref(), SHARED_KEY_LABEL)?;
+        let entry = KeyStoreEntry::new(id.clone(), EphemeralKey::SharedSecret(shared_key));
+        self.add_entry(entry);
+
+        Ok(id)
+    }
+
+    pub fn mlkem_768_decaps_for_id(
+        &self,
+        id: &ID,
+        ct: mlkem768::MlKem768Ciphertext,
+    ) -> Result<ID, Error> {
+        let shared_key = {
+            let entries = self.entries.read().map_err(|_| Error::Sync)?;
+            match entries.get(id).ok_or(Error::UnknownID)?.get_key() {
+                EphemeralKey::MlKem768Key(key) => Ok(SharedKey::new(mlkem768::decapsulate(key, &ct))),
+                _ => Err(Error::Unsupported),
+            }?
+        };
+
+        let id = self.get_tag(shared_key.as_ref(), SHARED_KEY_LABEL)?;
+        let entry = KeyStoreEntry::new(id.clone(), EphemeralKey::SharedSecret(shared_key));
+        self.add_entry(entry);
+
+        Ok(id)
+    }
+
+    pub fn mlkem_768_encaps_for_id(
+        &self,
+        pk: &MlKem768PublicKey,
+        rng: &mut impl CryptoRng,
+    ) -> Result<(ID, MlKem768Ciphertext), Error> {
+        let (ct, shared_key) = pk.encaps(rng);
+        let id = self.get_tag(shared_key.as_ref(), SHARED_KEY_LABEL)?;
+        let entry = KeyStoreEntry::new(id.clone(), EphemeralKey::SharedSecret(shared_key));
+        self.add_entry(entry);
+
+        Ok((id, ct))
+    }
+
+    pub fn mlkem_768_generate_key(
+        &self,
+        rng: &mut impl CryptoRng,
+    ) -> Result<(ID, MlKem768PublicKey), Error> {
+        let mut rand = [0u8; libcrux_ml_kem::KEY_GENERATION_SEED_SIZE];
+        rng.fill_bytes(&mut rand);
+        let (sk, pk) = mlkem768::generate_key_pair(rand).into_parts();
+
+        let id = self.get_tag(sk.as_slice(), MLKEM_768_LABEL)?;
+        let key = EphemeralKey::MlKem768Key(Arc::new(sk));
+        let pk = MlKem768PublicKey::new(pk.into());
+        let entry = KeyStoreEntry { id: id.clone(), key };
+        self.add_entry(entry);
+
+        Ok((id, pk))
+    }
+
+    pub fn x25519_generate_key(
+        &self,
+        rng: &mut impl CryptoRng,
+    ) -> Result<(ID, X25519PublicKey), Error> {
+        let mut rand = [0u8; curve25519::DK_LEN];
+        rng.fill_bytes(&mut rand);
+        let (pub_key, priv_key) =
+            curve25519::X25519::generate_pair(&rand).map_err(|_| Error::KeyExchange)?;
+
+        let id = self.get_tag(&priv_key, X25519_LABEL)?;
+        let key = EphemeralKey::X25519Key(X25519SecretKey::new(priv_key));
+        let pk = X25519PublicKey::new(pub_key);
+        let entry = KeyStoreEntry { id: id.clone(), key };
+        self.add_entry(entry);
+
+        Ok((id, pk))
+    }
+
+    // ------------------------------------------------
+    // HKDF
+    // ------------------------------------------------
+    pub fn sha256_hkdf_extract_public_salt(&self, id: &ID, salt: &[u8]) -> Result<ID, Error> {
+        let entry = {
+                let mut entries = self.entries.write().map_err(|_| Error::Sync)?;
+                entries.remove(id).ok_or(Error::UnknownID)?
+        };
+
+        let pseudorandom_key = match entry.get_key() {
+            EphemeralKey::SharedSecret(key) => key.sha2_256_hkdf_extract(Some(salt)),
+            _ => Err(Error::Unsupported),
+        }?;
+
+        let id = self.get_tag(pseudorandom_key.as_ref(), PRK_LABEL)?;
+        let key = EphemeralKey::PseudorandomKey(pseudorandom_key);
+        let entry = KeyStoreEntry { id: id.clone(), key };
+        self.add_entry(entry);
+
+        Ok(id)
+    }
+
+    pub fn sha256_hkdf_extract_secret_salt(&self, id: Option<&ID>, salt: &ID) -> Result<ID, Error> {
+        let (key_entry, salt_value) = {
+            let mut entries = self.entries.write().map_err(|_| Error::Sync)?;
+
+            let key_entry = match id {
+                Some(id) => {
+                    entries.remove(id).ok_or(Error::UnknownID)?
+                }
+                None => {
+                    let default_key = EphemeralKey::SharedSecret(SharedKey::new([0u8; 32]));
+                    KeyStoreEntry::new(ID::from([0u8; 31]), default_key)
+                }
+            };
+            
+            let salt_entry = match entries.entry(salt.clone()) {
+                Entry::Occupied(mut entry) => {
+                    let entry = entry.get_mut();
+                    entry.get_mut_key().set_hkdf_salt().ok_or(Error::Unsupported)
+                }
+                Entry::Vacant(_) => Err(Error::UnknownID),
+            }?;
+
+            (key_entry, salt_entry)
+        };
+
+        
+        let pseudorandom_key = match (key_entry.get_key(), salt_value) {
+            (EphemeralKey::SharedSecret(key), EphemeralKey::HkdfSalt(salt)) | 
+            (EphemeralKey::SharedSecret(key), EphemeralKey::RandomBytes(salt)) => key.sha2_256_hkdf_extract(Some(salt.as_ref())),
+            _ => Err(Error::Unsupported),
+        }?;
+
+
+        let id = self.get_tag(pseudorandom_key.as_ref(), PRK_LABEL)?;
+        let key = EphemeralKey::PseudorandomKey(pseudorandom_key);
+        let entry = KeyStoreEntry::new(id.clone(), key );
+        self.add_entry(entry);
+
+        Ok(id)
+    }
+
+    pub fn sha256_hkdf_expand(&self, id: &ID, info: &[u8], output_len: usize) -> Result<ID, Error> {
+        let okm = {
+            let mut entries = self.entries.write().map_err(|_| Error::Sync)?;
+            match entries.entry(id.clone()) {
+                Entry::Occupied(mut entry) => {
+                    let entry = entry.get_mut();
+                    entry.get_mut_key().set_prk().ok_or(Error::Unsupported)?;
+                    match entry.get_key() {
+                        EphemeralKey::PseudorandomKey(key) => key.sha2_256_hkdf_expand(info, output_len),
+                        _ => Err(Error::Unsupported),
+                    }
+                }
+                Entry::Vacant(_) => Err(Error::UnknownID),
+            }?
+        };
+
+        let id = self.get_tag(okm.as_ref(), RANDOM_BYTES_LABEL)?;
+        let key = EphemeralKey::RandomBytes(okm);
+        let entry = KeyStoreEntry { id: id.clone(), key };
+        self.add_entry(entry);
+
+        Ok(id)
+    }
+
+    pub fn export_nonce(&self, id: &ID) -> Result<[u8; 12], Error> {
+        let entry = {
+                let mut entries = self.entries.write().map_err(|_| Error::Sync)?;
+                entries.remove(id).ok_or(Error::UnknownID)?
+        };
+        match entry.get_key() {
+            EphemeralKey::RandomBytes(bytes) => Ok(bytes.as_ref().try_into().map_err(|_| Error::HKDF)?),
+            _ => Err(Error::Unsupported),
+        }
+    }
+
+    pub fn hmac_sha2_256_authenticate(&self, id: &ID, message: &[u8]) -> Result<HmacSha256Mac, Error> {
+        let mut entries = self.entries.write().map_err(|_| Error::Sync)?;
+        match entries.entry(id.clone()) {
+            Entry::Occupied(mut entry) => {
+                let entry = entry.get_mut();
+                entry.get_mut_key().set_hmac256_key().ok_or(Error::Unsupported)?;
+                match entry.get_key() {
+                    EphemeralKey::HMACKey(key) => Ok(key.authenticate_msg(message)),
+                    _ => Err(Error::Unsupported),
+                }
+            }
+            Entry::Vacant(_) => Err(Error::UnknownID),
+        }
+    }
+}
+
+impl KeyStore<LongTermKey> {
     pub fn from_disk() -> Result<Self, Error> {
         let agent_path = format!("{}/agent", env!("HOME"));
         let agent_path = Path::new(&agent_path);
@@ -153,7 +407,7 @@ impl KeyStore {
             .map(|key| Base64::decode(key, &mut root_key).unwrap())
             .ok_or(Error::Encoding)?;
 
-        let store = KeyStore {
+        let store = Self {
             root_key,
             entries: RwLock::new(HashMap::new()),
         };
@@ -213,113 +467,6 @@ impl KeyStore {
         Ok(store)
     }
 
-    fn add_entry(&self, entry: KeyStoreEntry) {
-        self.entries.write().unwrap().insert(entry.id.clone(), entry);
-    }
-
-    fn get_tag(&self, bytes: &[u8], customization: &[u8]) -> Result<ID, Error> {
-        let mut tag = [0u8; ID_SIZE];
-        kmac::kmac_128(&mut tag, &self.root_key, bytes, customization)
-            .try_into()
-            .map_err(|_| Error::MAC)
-    }
-
-    pub fn chacha20poly1305_decrypt_for_id<'a>(&self, id: &ID, plaintext: &'a mut [u8], nonce: &[u8; chacha20::NONCE_LEN], tag: &[u8; chacha20::TAG_LEN], ciphertext: &[u8], aad: &[u8]) -> Result<&'a [u8], Error>{
-        let mut entries = self.entries.write().map_err(|_| Error::Sync)?;
-        match entries.entry(id.clone()) {
-            Entry::Occupied(mut entry) => {
-                let entry = entry.get_mut();
-                entry.get_mut_key().set_chacha20poly1305_key().ok_or(Error::Unsupported)?;
-                match entry.get_key() {
-                    SecretKey::ChaCha20Poly1305Key(key) => {
-                        key.decrypt(plaintext, nonce.into(), aad, ciphertext, tag.into()).map_err(|_| Error::AEAD)?;
-                        Ok(plaintext)
-                    }
-                    _ => Err(Error::Unsupported),
-                }
-            }
-            Entry::Vacant(_) => Err(Error::UnknownID),
-        }
-    }
-    
-    pub fn chacha20poly1305_encrypt_for_id<'a>(&self, id: &ID, ciphertext: &'a mut [u8], nonce: &[u8; chacha20::NONCE_LEN], plaintext: &[u8], aad: &[u8]) -> Result<(&'a [u8], [u8; chacha20::TAG_LEN]), Error>{
-        let mut entries = self.entries.write().map_err(|_| Error::Sync)?;
-        match entries.entry(id.clone()) {
-            Entry::Occupied(mut entry) => {
-                let entry = entry.get_mut();
-                entry.get_mut_key().set_chacha20poly1305_key().ok_or(Error::Unsupported)?;
-                let mut tag = chacha20::Tag::from([0u8; chacha20::TAG_LEN]);
-                match entry.get_key() {
-                    SecretKey::ChaCha20Poly1305Key(key) => {
-                        key.encrypt(ciphertext, &mut tag, nonce.into(), aad, plaintext).map_err(|_| Error::AEAD)?;
-                        Ok((ciphertext, *tag.as_ref()))
-                    }
-                    _ => Err(Error::Unsupported),
-                }
-            }
-            Entry::Vacant(_) => Err(Error::UnknownID),
-        }
-    }
-
-    pub fn x25519_derive_for_id(&self, id: &ID, pk: &X25519PublicKey) -> Result<ID, Error> {
-        let shared_key = {
-            let entries = self.entries.read().map_err(|_| Error::Sync)?;
-            match entries.get(id).ok_or(Error::UnknownID)?.get_key() {
-                SecretKey::X25519Key(key) => key.derive(pk),
-                _ => Err(Error::Unsupported),
-            }?
-        };
-        let id = self.get_tag(shared_key.as_ref(), SHARED_KEY_LABEL)?;
-        let entry = KeyStoreEntry::new(id.clone(), SecretKey::SharedSecret(shared_key));
-        self.add_entry(entry);
-
-        Ok(id)
-    }
-
-    pub fn mlkem_768_decaps_for_id(
-        &self,
-        id: &ID,
-        ct: mlkem768::MlKem768Ciphertext,
-    ) -> Result<ID, Error> {
-        let shared_key = {
-            let entries = self.entries.read().map_err(|_| Error::Sync)?;
-            match entries.get(id).ok_or(Error::UnknownID)?.get_key() {
-                SecretKey::MlKem768Key(key) => Ok(SharedKey::new(mlkem768::decapsulate(key, &ct))),
-                _ => Err(Error::Unsupported),
-            }?
-        };
-
-        let id = self.get_tag(shared_key.as_ref(), SHARED_KEY_LABEL)?;
-        let entry = KeyStoreEntry::new(id.clone(), SecretKey::SharedSecret(shared_key));
-        self.add_entry(entry);
-
-        Ok(id)
-    }
-
-    pub fn mlkem_768_encaps_for_id(
-        &self,
-        pk: &MlKem768PublicKey,
-        rng: &mut impl CryptoRng,
-    ) -> Result<(ID, MlKem768Ciphertext), Error> {
-        let (ct, shared_key) = pk.encaps(rng);
-        let id = self.get_tag(shared_key.as_ref(), SHARED_KEY_LABEL)?;
-        let entry = KeyStoreEntry::new(id.clone(), SecretKey::SharedSecret(shared_key));
-        self.add_entry(entry);
-
-        Ok((id, ct))
-    }
-
-    pub fn export_nonce(&self, id: &ID) -> Result<[u8; 12], Error> {
-        let entry = {
-                let mut entries = self.entries.write().map_err(|_| Error::Sync)?;
-                entries.remove(id).ok_or(Error::UnknownID)?
-        };
-        match entry.get_key() {
-            SecretKey::RandomBytes(bytes) => Ok(bytes.as_ref().try_into().map_err(|_| Error::HKDF)?),
-            _ => Err(Error::Unsupported),
-        }
-    }
-
     pub fn ecdsa_p256_sign_for_id(
         &self,
         id: &ID,
@@ -328,7 +475,7 @@ impl KeyStore {
     ) -> Result<EcDsaP256Signature<SHA256>, Error> {
         let entries = self.entries.read().map_err(|_| Error::Sync)?;
         match entries.get(id).ok_or(Error::UnknownID)?.get_key() {
-            SecretKey::EcDsaP256Key(key) => key.sign(message, rng),
+            LongTermKey::EcDsaP256Key(key) => key.sign(message, rng),
             _ => Err(Error::Unsupported),
         }
     }
@@ -336,7 +483,7 @@ impl KeyStore {
     pub fn ed25519_sign_for_id(&self, id: &ID, message: &[u8]) -> Result<Ed25519Signature, Error> {
         let entries = self.entries.read().map_err(|_| Error::Sync)?;
         match entries.get(id).ok_or(Error::UnknownID)?.get_key() {
-            SecretKey::Ed25519Key(key) => key.sign(message),
+            LongTermKey::Ed25519Key(key) => key.sign(message),
             _ => Err(Error::Unsupported),
         }
     }
@@ -350,7 +497,7 @@ impl KeyStore {
         let pk = ecdsa::p256::secret_to_public(key.get_key()).map_err(|_| Error::PublicKey)?;
         let pk = EcDsaP256PublicKey::<SHA256>::from(pk);
 
-        let entry = KeyStoreEntry::new(id.clone(), SecretKey::EcDsaP256Key(key));
+        let entry = KeyStoreEntry::new(id.clone(), LongTermKey::EcDsaP256Key(key));
         self.add_entry(entry);
 
         Ok((id, pk))
@@ -363,146 +510,9 @@ impl KeyStore {
 
         let pk = Ed25519PublicKey::new(ed25519::VerificationKey::from_bytes(pk));
 
-        let entry = KeyStoreEntry::new(id.clone(), SecretKey::Ed25519Key(key));
+        let entry = KeyStoreEntry::new(id.clone(), LongTermKey::Ed25519Key(key));
         self.add_entry(entry);
 
         Ok((id, pk))
-    }
-
-    pub fn mlkem_768_generate_key(
-        &self,
-        rng: &mut impl CryptoRng,
-    ) -> Result<(ID, MlKem768PublicKey), Error> {
-        let mut rand = [0u8; libcrux_ml_kem::KEY_GENERATION_SEED_SIZE];
-        rng.fill_bytes(&mut rand);
-        let (sk, pk) = mlkem768::generate_key_pair(rand).into_parts();
-
-        let id = self.get_tag(sk.as_slice(), MLKEM_768_LABEL)?;
-        let key = SecretKey::MlKem768Key(Arc::new(sk));
-        let pk = MlKem768PublicKey::new(pk.into());
-        let entry = KeyStoreEntry { id: id.clone(), key };
-        self.add_entry(entry);
-
-        Ok((id, pk))
-    }
-
-    pub fn x25519_generate_key(
-        &self,
-        rng: &mut impl CryptoRng,
-    ) -> Result<(ID, X25519PublicKey), Error> {
-        let mut rand = [0u8; curve25519::DK_LEN];
-        rng.fill_bytes(&mut rand);
-        let (pub_key, priv_key) =
-            curve25519::X25519::generate_pair(&rand).map_err(|_| Error::KeyExchange)?;
-
-        let id = self.get_tag(&priv_key, X25519_LABEL)?;
-        let key = SecretKey::X25519Key(X25519SecretKey::new(priv_key));
-        let pk = X25519PublicKey::new(pub_key);
-        let entry = KeyStoreEntry { id: id.clone(), key };
-        self.add_entry(entry);
-
-        Ok((id, pk))
-    }
-
-    // ------------------------------------------------
-    // HKDF
-    // ------------------------------------------------
-    pub fn sha256_hkdf_extract_public_salt(&self, id: &ID, salt: &[u8]) -> Result<ID, Error> {
-        let entry = {
-                let mut entries = self.entries.write().map_err(|_| Error::Sync)?;
-                entries.remove(id).ok_or(Error::UnknownID)?
-        };
-
-        let pseudorandom_key = match entry.get_key() {
-            SecretKey::SharedSecret(key) => key.sha2_256_hkdf_extract(Some(salt)),
-            _ => Err(Error::Unsupported),
-        }?;
-
-        let id = self.get_tag(pseudorandom_key.as_ref(), PRK_LABEL)?;
-        let key = SecretKey::PseudorandomKey(pseudorandom_key);
-        let entry = KeyStoreEntry { id: id.clone(), key };
-        self.add_entry(entry);
-
-        Ok(id)
-    }
-
-    pub fn sha256_hkdf_extract_secret_salt(&self, id: Option<&ID>, salt: &ID) -> Result<ID, Error> {
-        let (key_entry, salt_value) = {
-            let mut entries = self.entries.write().map_err(|_| Error::Sync)?;
-
-            let key_entry = match id {
-                Some(id) => {
-                    entries.remove(id).ok_or(Error::UnknownID)?
-                }
-                None => {
-                    let default_key = SecretKey::SharedSecret(SharedKey::new([0u8; 32]));
-                    KeyStoreEntry::new(ID::from([0u8; 31]), default_key)
-                }
-            };
-            
-            let salt_entry = match entries.entry(salt.clone()) {
-                Entry::Occupied(mut entry) => {
-                    let entry = entry.get_mut();
-                    entry.get_mut_key().set_hkdf_salt().ok_or(Error::Unsupported)
-                }
-                Entry::Vacant(_) => Err(Error::UnknownID),
-            }?;
-
-            (key_entry, salt_entry)
-        };
-
-        
-        let pseudorandom_key = match (key_entry.get_key(), salt_value) {
-            (SecretKey::SharedSecret(key), SecretKey::HkdfSalt(salt)) | 
-            (SecretKey::SharedSecret(key), SecretKey::RandomBytes(salt)) => key.sha2_256_hkdf_extract(Some(salt.as_ref())),
-            _ => Err(Error::Unsupported),
-        }?;
-
-
-        let id = self.get_tag(pseudorandom_key.as_ref(), PRK_LABEL)?;
-        let key = SecretKey::PseudorandomKey(pseudorandom_key);
-        let entry = KeyStoreEntry::new(id.clone(), key );
-        self.add_entry(entry);
-
-        Ok(id)
-    }
-
-    pub fn sha256_hkdf_expand(&self, id: &ID, info: &[u8], output_len: usize) -> Result<ID, Error> {
-        let okm = {
-            let mut entries = self.entries.write().map_err(|_| Error::Sync)?;
-            match entries.entry(id.clone()) {
-                Entry::Occupied(mut entry) => {
-                    let entry = entry.get_mut();
-                    entry.get_mut_key().set_prk().ok_or(Error::Unsupported)?;
-                    match entry.get_key() {
-                        SecretKey::PseudorandomKey(key) => key.sha2_256_hkdf_expand(info, output_len),
-                        _ => Err(Error::Unsupported),
-                    }
-                }
-                Entry::Vacant(_) => Err(Error::UnknownID),
-            }?
-        };
-
-        let id = self.get_tag(okm.as_ref(), RANDOM_BYTES_LABEL)?;
-        let key = SecretKey::RandomBytes(okm);
-        let entry = KeyStoreEntry { id: id.clone(), key };
-        self.add_entry(entry);
-
-        Ok(id)
-    }
-
-    pub fn hmac_sha2_256_authenticate(&self, id: &ID, message: &[u8]) -> Result<HmacSha256Mac, Error> {
-        let mut entries = self.entries.write().map_err(|_| Error::Sync)?;
-        match entries.entry(id.clone()) {
-            Entry::Occupied(mut entry) => {
-                let entry = entry.get_mut();
-                entry.get_mut_key().set_hmac256_key().ok_or(Error::Unsupported)?;
-                match entry.get_key() {
-                    SecretKey::HMACKey(key) => Ok(key.authenticate_msg(message)),
-                    _ => Err(Error::Unsupported),
-                }
-            }
-            Entry::Vacant(_) => Err(Error::UnknownID),
-        }
     }
 }

@@ -15,7 +15,7 @@ use std::env;
 use std::io::Write;
 use std::{fs, path::PathBuf};
 
-static KEY_STORE: LazyLock<KeyStore> =
+static KEY_STORE: LazyLock<LongTermKeyStore> =
     LazyLock::new(|| KeyStore::from_disk().expect("Failed to load agent"));
 
 pub(crate) fn handle_request(request: &IPCSetupRequest) -> Result<IPCSetupResponse, Error> {
