@@ -67,12 +67,8 @@ impl EphemeralKey {
     pub(crate) fn set_prk(&mut self) -> Option<Self> {
         match &self {
             EphemeralKey::RandomBytes(bytes) => {
-                let bytes: [u8; 32] = bytes.as_ref().try_into().ok()?;
+                let bytes: [u8; 32] = *bytes.as_ref().as_array()?;
                 let key_copy = EphemeralKey::HkdfSha256(HkdfSha256PRK::new(bytes));
-                Some(mem::replace(self, key_copy))
-            }
-            EphemeralKey::HkdfSha256(bytes) => {
-                let key_copy = EphemeralKey::HkdfSha256(bytes.clone());
                 Some(mem::replace(self, key_copy))
             }
             _ => None,
@@ -85,10 +81,6 @@ impl EphemeralKey {
                 let key_copy = EphemeralKey::HmacSha256(bytes.into());
                 Some(mem::replace(self, key_copy))
             }
-            EphemeralKey::HmacSha256(bytes) => {
-                let key_copy = EphemeralKey::HmacSha256(bytes.clone());
-                Some(mem::replace(self, key_copy))
-            }
             _ => None,
         }
     }
@@ -96,13 +88,7 @@ impl EphemeralKey {
     pub(crate) fn set_chacha20poly1305_key(&mut self) -> Option<Self> {
         match &self {
             EphemeralKey::RandomBytes(bytes) => {
-                let bytes: [u8; chacha20::KEY_LEN] = bytes.as_ref().try_into().ok()?;
-                let key = chacha20::Key::from(bytes);
-                let key_copy = EphemeralKey::ChaCha20Poly1305(key);
-                Some(mem::replace(self, key_copy))
-            }
-            EphemeralKey::ChaCha20Poly1305(key) => {
-                let bytes = *key.as_ref();
+                let bytes: [u8; chacha20::KEY_LEN] = *bytes.as_ref().as_array()?;
                 let key = chacha20::Key::from(bytes);
                 let key_copy = EphemeralKey::ChaCha20Poly1305(key);
                 Some(mem::replace(self, key_copy))
@@ -156,7 +142,7 @@ impl KeyStore<EphemeralKey> {
         match entries.entry(id.clone()) {
             Entry::Occupied(mut entry) => {
                 let key = entry.get_mut();
-                key.set_chacha20poly1305_key().ok_or(Error::Unsupported)?;
+                if matches!(key, EphemeralKey::RandomBytes(_)) {key.set_chacha20poly1305_key().ok_or(Error::Unsupported)?;}
                 match key {
                     EphemeralKey::ChaCha20Poly1305(key) => {
                         key.decrypt(plaintext, nonce.into(), aad, ciphertext, tag.into())
@@ -182,7 +168,7 @@ impl KeyStore<EphemeralKey> {
         match entries.entry(id.clone()) {
             Entry::Occupied(mut entry) => {
                 let key = entry.get_mut();
-                key.set_chacha20poly1305_key().ok_or(Error::Unsupported)?;
+                if matches!(key, EphemeralKey::RandomBytes(_)) {key.set_chacha20poly1305_key().ok_or(Error::Unsupported)?;}
                 let mut tag = chacha20::Tag::from([0u8; chacha20::TAG_LEN]);
                 match key {
                     EphemeralKey::ChaCha20Poly1305(key) => {
@@ -327,7 +313,7 @@ impl KeyStore<EphemeralKey> {
             match entries.entry(id.clone()) {
                 Entry::Occupied(mut entry) => {
                     let key = entry.get_mut();
-                    key.set_prk().ok_or(Error::Unsupported)?;
+                    if matches!(key, EphemeralKey::RandomBytes(_)) {key.set_prk().ok_or(Error::Unsupported)?;}
                     match key {
                         EphemeralKey::HkdfSha256(key) => key.sha2_256_hkdf_expand(info, output_len),
                         _ => Err(Error::Unsupported),
@@ -364,7 +350,7 @@ impl KeyStore<EphemeralKey> {
         match entries.entry(id.clone()) {
             Entry::Occupied(mut entry) => {
                 let key = entry.get_mut();
-                key.set_hmac256_key().ok_or(Error::Unsupported)?;
+                if matches!(key, EphemeralKey::RandomBytes(_)) {key.set_hmac256_key().ok_or(Error::Unsupported)?;}
                 match key {
                     EphemeralKey::HmacSha256(key) => Ok(key.authenticate_msg(message)),
                     _ => Err(Error::Unsupported),
