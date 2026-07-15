@@ -1,6 +1,6 @@
 use libcrux_agent::hmac::{HmacSha256Key, HmacSha256Mac, Sha2_256HMAC};
 
-use crate::{KeyID, NetworkObject, provider::get_agent};
+use crate::{provider::get_agent, KeyID, NetworkObject};
 
 #[derive(Debug)]
 pub enum Error {
@@ -20,16 +20,16 @@ pub type DefaultHmacKey = HmacSha256Key;
 /// ```
 /// use rand::{RngCore, SeedableRng};
 /// use rand_chacha::ChaChaRng;
-/// 
+///
 /// use libcrux_primitive_api::hmac::*;
-/// 
+///
 /// let mut rng = ChaChaRng::from_os_rng();
 /// let mut key_material = [0u8; 32];
 /// rng.fill_bytes(&mut key_material);
-/// 
+///
 /// let auth_key = DefaultHmacKey::try_from(key_material.as_ref()).expect("Keygen failed");
 /// let msg = b"Test message";
-/// 
+///
 /// let tag = auth_key.authenticate(msg).expect("Authentication failed");
 /// let shk_b = match auth_key.verify(msg, tag) {
 ///     Ok(_) => println!("Valid Tag"),
@@ -38,7 +38,7 @@ pub type DefaultHmacKey = HmacSha256Key;
 ///     _ => println!("Unexpected Error"),
 /// };
 /// ```
-pub trait AuthenticationKey: Send + Sync + for <'a> TryFrom<&'a[u8]>{
+pub trait AuthenticationKey: Send + Sync + for<'a> TryFrom<&'a [u8]> {
     type Tag: Eq + NetworkObject;
     const SCHEME: MacAlgorithm;
 
@@ -59,7 +59,9 @@ impl AuthenticationKey for KeyID<Sha2_256HMAC> {
     }
 
     fn verify(&self, msg: &[u8], tag: &Self::Tag) -> Result<(), Error> {
-        let new_tag = self.authenticate(msg).map_err(|_| Error::Internal("Agent signing failed".into()))?;
+        let new_tag = self
+            .authenticate(msg)
+            .map_err(|_| Error::Internal("Agent signing failed".into()))?;
         (&new_tag == tag).then_some(()).ok_or(Error::InvalidTag)
     }
 }
@@ -73,7 +75,9 @@ impl AuthenticationKey for HmacSha256Key {
     }
 
     fn verify(&self, msg: &[u8], tag: &Self::Tag) -> Result<(), Error> {
-        let new_tag = self.authenticate(msg).map_err(|_| Error::Internal("Agent signing failed".into()))?;
+        let new_tag = self
+            .authenticate(msg)
+            .map_err(|_| Error::Internal("Agent signing failed".into()))?;
         (&new_tag == tag).then_some(()).ok_or(Error::InvalidTag)
     }
 }

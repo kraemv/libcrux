@@ -15,7 +15,9 @@ use zerocopy::*;
 // Message-kind enumerations
 // ---------------------------------------------------------------------------
 
-#[derive(Clone, Copy, PartialEq, Eq, IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned,
+)]
 #[repr(u8)]
 pub enum MessageKind {
     ChaCha20Poly1305Decrypt,
@@ -103,8 +105,12 @@ impl From<ExportNonceResponse> for IPCResponse {
     }
 }
 
-impl From<AeadEncryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>> for IPCRequest {
-    fn from(msg: AeadEncryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>) -> Self {
+impl From<AeadEncryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>>
+    for IPCRequest
+{
+    fn from(
+        msg: AeadEncryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>,
+    ) -> Self {
         Self::new(MessageKind::ChaCha20Poly1305Encrypt, Vec::<u8>::from(msg))
     }
 }
@@ -115,8 +121,12 @@ impl From<AeadEncryptResponse<'_, ChaCha20Poly1305, CHACHA_TAG_LEN>> for IPCResp
     }
 }
 
-impl From<AeadDecryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>> for IPCRequest {
-    fn from(msg: AeadDecryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>) -> Self {
+impl From<AeadDecryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>>
+    for IPCRequest
+{
+    fn from(
+        msg: AeadDecryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>,
+    ) -> Self {
         Self::new(MessageKind::ChaCha20Poly1305Decrypt, Vec::<u8>::from(msg))
     }
 }
@@ -202,7 +212,9 @@ impl From<X25519DeriveResponse> for IPCResponse {
 impl From<HkdfExtractSecretRequest> for IPCRequest {
     fn from(request: HkdfExtractSecretRequest) -> Self {
         let mut payload = request.get_salt().as_bytes().to_vec();
-        if let Some(id) = request.get_id() { payload.extend_from_slice(id.as_ref()) }
+        if let Some(id) = request.get_id() {
+            payload.extend_from_slice(id.as_ref())
+        }
         Self::new(MessageKind::HkdfExtractSecret, payload)
     }
 }
@@ -241,13 +253,19 @@ impl From<HkdfResponse<HkdfExpand>> for IPCResponse {
 
 impl From<HmacRequest<'_, Sha2_256HMAC>> for IPCRequest {
     fn from(request: HmacRequest<'_, Sha2_256HMAC>) -> Self {
-        Self::new(MessageKind::HmacSha2_256Authenticate, Vec::<u8>::from(request))
+        Self::new(
+            MessageKind::HmacSha2_256Authenticate,
+            Vec::<u8>::from(request),
+        )
     }
 }
 
 impl From<HmacResponse<HmacSha256Mac>> for IPCResponse {
     fn from(msg: HmacResponse<HmacSha256Mac>) -> Self {
-        Self::new(MessageKind::HmacSha2_256Authenticate, msg.as_bytes().to_vec())
+        Self::new(
+            MessageKind::HmacSha2_256Authenticate,
+            msg.as_bytes().to_vec(),
+        )
     }
 }
 

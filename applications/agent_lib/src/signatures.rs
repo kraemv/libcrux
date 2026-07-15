@@ -15,18 +15,18 @@ pub struct SHA256 {}
 // A signature that holds its actual value and additional information
 pub struct EcDsaP256Signature<DigestAlg> {
     sig: ecdsa::p256::Signature,
-    _marker: PhantomData<DigestAlg>
+    _marker: PhantomData<DigestAlg>,
 }
 
 #[derive(Debug)]
 pub struct EcDsaP256PublicKey<DigestAlg> {
     key: ecdsa::p256::PublicKey,
-    _marker: PhantomData<DigestAlg>
+    _marker: PhantomData<DigestAlg>,
 }
 
 pub struct EcDsaP256PrivateKey<DigestAlg> {
     key: ecdsa::p256::PrivateKey,
-    _marker: PhantomData<DigestAlg>
+    _marker: PhantomData<DigestAlg>,
 }
 
 pub struct Ed25519PrivateKey(ed25519::SigningKey);
@@ -50,7 +50,10 @@ impl EcDsaP256Signature<SHA256> {
 
 impl<Algo> From<ecdsa::p256::Signature> for EcDsaP256Signature<Algo> {
     fn from(sig: ecdsa::p256::Signature) -> Self {
-        Self { sig, _marker: PhantomData }
+        Self {
+            sig,
+            _marker: PhantomData,
+        }
     }
 }
 
@@ -68,7 +71,10 @@ impl EcDsaP256PublicKey<SHA256> {
 
 impl<Algo> From<ecdsa::p256::PublicKey> for EcDsaP256PublicKey<Algo> {
     fn from(vk: ecdsa::p256::PublicKey) -> Self {
-        Self { key: vk, _marker: PhantomData }
+        Self {
+            key: vk,
+            _marker: PhantomData,
+        }
     }
 }
 
@@ -84,11 +90,14 @@ impl Clone for EcDsaP256PublicKey<SHA256> {
 
 impl From<ecdsa::p256::PrivateKey> for EcDsaP256PrivateKey<SHA256> {
     fn from(sk: ecdsa::p256::PrivateKey) -> Self {
-        Self { key: sk, _marker: PhantomData }
+        Self {
+            key: sk,
+            _marker: PhantomData,
+        }
     }
 }
 
-impl <DigestAlg> EcDsaP256PrivateKey <DigestAlg> {
+impl<DigestAlg> EcDsaP256PrivateKey<DigestAlg> {
     pub fn get_key(&self) -> &ecdsa::p256::PrivateKey {
         &self.key
     }
@@ -105,8 +114,8 @@ impl EcDsaP256PrivateKey<SHA256> {
         rng: &mut impl CryptoRng,
     ) -> Result<EcDsaP256Signature<SHA256>, Error> {
         let nonce = ecdsa::p256::Nonce::random(rng).map_err(|_| Error::Signing)?;
-        let sig =
-            ecdsa::p256::sign(DigestAlgorithm::Sha256, message, &self.key, &nonce).map_err(|_| Error::Signing)?;
+        let sig = ecdsa::p256::sign(DigestAlgorithm::Sha256, message, &self.key, &nonce)
+            .map_err(|_| Error::Signing)?;
         Ok(EcDsaP256Signature::<SHA256>::from(sig))
     }
 
@@ -182,9 +191,10 @@ impl TryFrom<&[u8]> for Ed25519PublicKey {
     type Error = Error;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        bytes.try_into()
+        bytes
+            .try_into()
             .map(|bytes| Self::new(ed25519::VerificationKey::from_bytes(bytes)))
-            .map_err(|_| Error::PublicKey)   
+            .map_err(|_| Error::PublicKey)
     }
 }
 
@@ -198,9 +208,10 @@ impl TryFrom<&[u8]> for Ed25519Signature {
     type Error = Error;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        bytes.try_into()
+        bytes
+            .try_into()
             .map(|bytes| Self::new(ed25519::Signature::from_bytes(bytes)))
-            .map_err(|_| Error::Signing)   
+            .map_err(|_| Error::Signing)
     }
 }
 
@@ -216,7 +227,7 @@ impl<Algo> TryFrom<&[u8]> for EcDsaP256PublicKey<Algo> {
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         ecdsa::p256::PublicKey::try_from(bytes)
             .map(Self::from)
-            .map_err(|_| Error::PublicKey)   
+            .map_err(|_| Error::PublicKey)
     }
 }
 
@@ -230,9 +241,10 @@ impl<Algo> TryFrom<&[u8]> for EcDsaP256Signature<Algo> {
     type Error = Error;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        bytes.try_into()
+        bytes
+            .try_into()
             .map(|bytes| Self::from(ecdsa::p256::Signature::from_bytes(bytes)))
-            .map_err(|_| Error::Signing)   
+            .map_err(|_| Error::Signing)
     }
 }
 

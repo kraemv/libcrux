@@ -1,36 +1,38 @@
 use crate::{Error, RNG};
 
-use libcrux_agent::key_store::{EphemeralKeyStore, LongTermKeyStore};
-use libcrux_agent::{ID, hmac::HmacSha256Mac, key_store::KeyStore};
 use libcrux_agent::aead::{CHACHA_NONCE_LEN, CHACHA_TAG_LEN};
+use libcrux_agent::key_store::{EphemeralKeyStore, LongTermKeyStore};
 use libcrux_agent::kx::{MlKem768Ciphertext, MlKem768PublicKey, X25519PublicKey};
 use libcrux_agent::signatures::{EcDsaP256Signature, Ed25519Signature, SHA256};
+use libcrux_agent::{hmac::HmacSha256Mac, key_store::KeyStore, ID};
 
-use rand::CryptoRng;
 use rand::rand_core::UnwrapErr;
+use rand::CryptoRng;
 use std::sync::LazyLock;
 
 static KEY_STORE: LazyLock<LongTermKeyStore> =
     LazyLock::new(|| KeyStore::from_disk().expect("Failed to load agent"));
 
 static EPHEMERAL_KEY_STORE: LazyLock<EphemeralKeyStore> = LazyLock::new(|| {
-    KeyStore::new( &mut UnwrapErr(RNG.write().unwrap())).expect("Failed to initialize KeyStore")
+    KeyStore::new(&mut UnwrapErr(RNG.write().unwrap())).expect("Failed to initialize KeyStore")
 });
 
 fn get_rng() -> Result<impl CryptoRng, Error> {
-    let rng = RNG.write()
-        .map_err(|_| Error::RNG)?;
+    let rng = RNG.write().map_err(|_| Error::RNG)?;
     Ok(UnwrapErr(rng))
 }
 
-pub fn add_entropy(entropy: &[u8]) -> Result<(), Error>{
+pub fn add_entropy(entropy: &[u8]) -> Result<(), Error> {
     RNG.write()
         .map_err(|_| Error::RNG)?
         .reseed(entropy, &[])
         .map_err(|_| Error::RNG)
 }
 
-pub fn ecdsa_p256_sign_for_id(id: &ID, message: &[u8]) -> Result<EcDsaP256Signature<SHA256>, Error> {
+pub fn ecdsa_p256_sign_for_id(
+    id: &ID,
+    message: &[u8],
+) -> Result<EcDsaP256Signature<SHA256>, Error> {
     KEY_STORE.ecdsa_p256_sign_for_id(id, message, &mut get_rng()?)
 }
 
@@ -38,11 +40,24 @@ pub fn ed25519_sign_for_id(id: &ID, message: &[u8]) -> Result<Ed25519Signature, 
     KEY_STORE.ed25519_sign_for_id(id, message)
 }
 
-pub fn chacha20poly1305_decrypt_for_id<'a>(id: &ID, plaintext: &'a mut [u8], nonce: &[u8; CHACHA_NONCE_LEN], tag: &[u8; CHACHA_TAG_LEN], ciphertext: &[u8], aad: &[u8]) -> Result<&'a [u8], Error>{
+pub fn chacha20poly1305_decrypt_for_id<'a>(
+    id: &ID,
+    plaintext: &'a mut [u8],
+    nonce: &[u8; CHACHA_NONCE_LEN],
+    tag: &[u8; CHACHA_TAG_LEN],
+    ciphertext: &[u8],
+    aad: &[u8],
+) -> Result<&'a [u8], Error> {
     EPHEMERAL_KEY_STORE.chacha20poly1305_decrypt_for_id(id, plaintext, nonce, tag, ciphertext, aad)
 }
 
-pub fn chacha20poly1305_encrypt_for_id<'a>(id: &ID, ciphertext: &'a mut [u8], nonce: &[u8; CHACHA_NONCE_LEN], plaintext: &[u8], aad: &[u8]) -> Result<(&'a [u8], [u8; CHACHA_TAG_LEN]), Error>{
+pub fn chacha20poly1305_encrypt_for_id<'a>(
+    id: &ID,
+    ciphertext: &'a mut [u8],
+    nonce: &[u8; CHACHA_NONCE_LEN],
+    plaintext: &[u8],
+    aad: &[u8],
+) -> Result<(&'a [u8], [u8; CHACHA_TAG_LEN]), Error> {
     EPHEMERAL_KEY_STORE.chacha20poly1305_encrypt_for_id(id, ciphertext, nonce, plaintext, aad)
 }
 
@@ -62,9 +77,7 @@ pub fn mlkem_768_decaps_for_id(id: &ID, ct: &MlKem768Ciphertext) -> Result<ID, E
     EPHEMERAL_KEY_STORE.mlkem_768_decaps_for_id(id, ct.into())
 }
 
-pub fn mlkem_768_encaps_for_id(
-    pk: &MlKem768PublicKey,
-) -> Result<(ID, MlKem768Ciphertext), Error> {
+pub fn mlkem_768_encaps_for_id(pk: &MlKem768PublicKey) -> Result<(ID, MlKem768Ciphertext), Error> {
     EPHEMERAL_KEY_STORE.mlkem_768_encaps_for_id(pk, &mut get_rng()?)
 }
 

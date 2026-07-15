@@ -4,22 +4,28 @@ use libcrux_agent::aead::*;
 use libcrux_agent::aead_messages::*;
 use libcrux_agent::hkdf_messages::*;
 use libcrux_agent::hmac::Sha2_256HMAC;
+use libcrux_agent::hmac_messages::*;
 use libcrux_agent::kex_messages::*;
 use libcrux_agent::messages::{IPCRequest, IPCResponse, MessageKind};
 use libcrux_agent::rng_messages::EntropyRequest;
 use libcrux_agent::signatures::{EcDsaP256SHA256, Ed25519};
 use libcrux_agent::signing_messages::*;
-use libcrux_agent::hmac_messages::*;
 use zerocopy::*;
 
 pub(crate) fn handle_request(request: &mut IPCRequest) -> Result<IPCResponse, Error> {
     match request.get_header().get_type() {
         MessageKind::ChaCha20Poly1305Decrypt => {
-            let mut request = AeadDecryptRequest::<ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>::try_from(request.get_mut_payload())?;
+            let mut request =
+                AeadDecryptRequest::<ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>::try_from(
+                    request.get_mut_payload(),
+                )?;
             handle_chacha20poly1305_decrypt_request(&mut request)
         }
         MessageKind::ChaCha20Poly1305Encrypt => {
-            let mut request = AeadEncryptRequest::<ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>::try_from(request.get_mut_payload())?;
+            let mut request =
+                AeadEncryptRequest::<ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>::try_from(
+                    request.get_mut_payload(),
+                )?;
             handle_chacha20poly1305_encrypt_request(&mut request)
         }
         MessageKind::EcDsaP256Sign => {
@@ -36,9 +42,7 @@ pub(crate) fn handle_request(request: &mut IPCRequest) -> Result<IPCResponse, Er
             handle_entropy_request(&request)
         }
 
-        MessageKind::Error => {
-            Err(Error::IO)
-        }
+        MessageKind::Error => Err(Error::IO),
 
         MessageKind::MlKem768Decaps => {
             let request = MlKem768DecapsRequest::try_ref_from_bytes(request.get_payload())
@@ -93,7 +97,7 @@ pub(crate) fn handle_request(request: &mut IPCRequest) -> Result<IPCResponse, Er
 }
 
 pub(crate) fn handle_chacha20poly1305_decrypt_request(
-    request: &mut AeadDecryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>
+    request: &mut AeadDecryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>,
 ) -> Result<IPCResponse, Error> {
     let id = request.get_id();
     let nonce = request.get_nonce();
@@ -106,15 +110,16 @@ pub(crate) fn handle_chacha20poly1305_decrypt_request(
 }
 
 pub(crate) fn handle_chacha20poly1305_encrypt_request(
-    request: &mut AeadEncryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>
+    request: &mut AeadEncryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>,
 ) -> Result<IPCResponse, Error> {
     let id = request.get_id();
     let nonce = request.get_nonce();
     let plaintext = request.get_plaintext();
     let aad = request.get_aad();
     let mut ciphertext = vec![0u8; plaintext.len()];
-    chacha20poly1305_encrypt_for_id(id, &mut ciphertext, nonce, plaintext, aad)
-        .map(|(ciphertext, tag)| IPCResponse::from(AeadEncryptResponse::from_parts(ciphertext, tag)))
+    chacha20poly1305_encrypt_for_id(id, &mut ciphertext, nonce, plaintext, aad).map(
+        |(ciphertext, tag)| IPCResponse::from(AeadEncryptResponse::from_parts(ciphertext, tag)),
+    )
 }
 
 pub(crate) fn handle_ecdsa_p256_sign_request(
@@ -131,11 +136,8 @@ pub(crate) fn handle_ed25519_sign_request(
         .map(|sig| IPCResponse::from(SignResponse::<Ed25519>::from(sig)))
 }
 
-pub(crate) fn handle_entropy_request(
-    request: &EntropyRequest,
-) -> Result<IPCResponse, Error> {
-    add_entropy(request.as_ref())
-        .map(|()| IPCResponse::entropy())
+pub(crate) fn handle_entropy_request(request: &EntropyRequest) -> Result<IPCResponse, Error> {
+    add_entropy(request.as_ref()).map(|()| IPCResponse::entropy())
 }
 
 pub(crate) fn handle_x25519_key_gen() -> Result<IPCResponse, Error> {
@@ -163,12 +165,8 @@ pub(crate) fn handle_mlkem768_encaps(
     request: &MlKem768EncapsRequest,
 ) -> Result<IPCResponse, Error> {
     let pk = request.get_key();
-    mlkem_768_encaps_for_id(pk).map(|(id, ct)| {
-        IPCResponse::from(MlKem768EncapsResponse::new(
-            id,
-            ct,
-        ))
-    })
+    mlkem_768_encaps_for_id(pk)
+        .map(|(id, ct)| IPCResponse::from(MlKem768EncapsResponse::new(id, ct)))
 }
 
 pub(crate) fn handle_hkdf_extract_public_salt(
@@ -181,19 +179,22 @@ pub(crate) fn handle_hkdf_extract_public_salt(
 pub(crate) fn handle_hkdf_extract_secret_salt(
     request: &HkdfExtractSecretRequest,
 ) -> Result<IPCResponse, Error> {
-        hkdf_extract_secret_salt(request.get_id(), request.get_salt())
-            .map(|id| IPCResponse::from(HkdfResponse::<HkdfExtractSecretSalt>::new(id)))
+    hkdf_extract_secret_salt(request.get_id(), request.get_salt())
+        .map(|id| IPCResponse::from(HkdfResponse::<HkdfExtractSecretSalt>::new(id)))
 }
 
+pub(crate) fn handle_hkdf_expand(request: &HkdfExpandRequest<'_>) -> Result<IPCResponse, Error> {
+    hkdf_expand(
+        request.get_id(),
+        request.get_info(),
+        request.get_output_len(),
+    )
+    .map(|id| IPCResponse::from(HkdfResponse::<HkdfExpand>::new(id)))
+}
 
-pub(crate) fn handle_hkdf_expand(
-    request: &HkdfExpandRequest<'_>,
+pub(crate) fn handle_hmac_sha2_256_authenticate(
+    request: &HmacRequest<Sha2_256HMAC>,
 ) -> Result<IPCResponse, Error> {
-    hkdf_expand(request.get_id(), request.get_info(), request.get_output_len())
-        .map(|id| IPCResponse::from(HkdfResponse::<HkdfExpand>::new(id)))
-}
-
-pub(crate) fn handle_hmac_sha2_256_authenticate(request: &HmacRequest<Sha2_256HMAC>) -> Result<IPCResponse, Error> {
     hmac_sha2_256_authenticate(request.get_id(), request.get_payload())
         .map(|tag| IPCResponse::from(HmacResponse::from(tag)))
 }

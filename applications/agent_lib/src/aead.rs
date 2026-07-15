@@ -21,7 +21,8 @@ impl<const N: usize> TryFrom<&[u8]> for AeadNonce<N> {
     type Error = crate::Error;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        value.try_into()
+        value
+            .try_into()
             .map(|bytes: [u8; N]| Self::from(bytes))
             .map_err(|_| crate::Error::AEAD)
     }
@@ -49,7 +50,8 @@ impl<const N: usize> TryFrom<&[u8]> for AeadTag<N> {
     type Error = crate::Error;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        value.try_into()
+        value
+            .try_into()
             .map(|bytes: [u8; N]| Self::from(bytes))
             .map_err(|_| crate::Error::AEAD)
     }

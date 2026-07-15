@@ -1,18 +1,17 @@
 use crate::kx::SharedKey;
 use crate::Error;
 use crate::InnerRndBytes;
-use std::vec::Vec as std_vec;
 use libcrux_hkdf as hkdf;
+use std::vec::Vec as std_vec;
 
 pub(crate) const SHA2_256_LEN: usize = hkdf::Algorithm::hash_len(hkdf::Algorithm::Sha256);
 
 #[derive(Clone)]
-pub struct HkdfSha256PRK ([u8; 32]);
+pub struct HkdfSha256PRK([u8; 32]);
 #[derive(Clone)]
-pub struct RandomBytes (InnerRndBytes);
+pub struct RandomBytes(InnerRndBytes);
 
 impl SharedKey {
-
     pub fn sha2_256_hkdf_extract(&self, salt: Option<&[u8]>) -> Result<HkdfSha256PRK, Error> {
         let salt = salt.unwrap_or(&[0u8; SHA2_256_LEN]);
         let mut prk = [0u8; 32];
@@ -63,9 +62,7 @@ impl TryFrom<&[u8]> for HkdfSha256PRK {
     type Error = Error;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        bytes.try_into()
-            .map(Self)
-            .map_err(|_| Error::HKDF)
+        bytes.try_into().map(Self).map_err(|_| Error::HKDF)
     }
 }
 

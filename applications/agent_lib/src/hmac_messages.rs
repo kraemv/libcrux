@@ -1,8 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::{
-    Error, ID, hmac::{HmacSha256Mac},
-};
+use crate::{hmac::HmacSha256Mac, Error, ID};
 
 use zerocopy::*;
 
@@ -22,10 +20,13 @@ pub struct HmacResponse<MAC> {
     tag: MAC,
 }
 
-
 impl<'a, Scheme> HmacRequest<'a, Scheme> {
     pub fn new(id: ID, message: &'a [u8]) -> Self {
-        Self { id, message, _marker: PhantomData }
+        Self {
+            id,
+            message,
+            _marker: PhantomData,
+        }
     }
 
     pub fn get_id(&self) -> &ID {
@@ -45,7 +46,11 @@ impl<'a, Scheme> TryFrom<&'a [u8]> for HmacRequest<'a, Scheme> {
             .split_at_checked(crate::ID_SIZE)
             .ok_or(Error::MalformedRequest)?;
         let id: ID = id.try_into().expect("No panic here!");
-        Ok(Self { id, message, _marker: PhantomData })
+        Ok(Self {
+            id,
+            message,
+            _marker: PhantomData,
+        })
     }
 }
 

@@ -23,7 +23,8 @@ fn main() {
         let Ok(new_request) = IPCSetupRequest::try_from(new_request.as_slice()) else {
             continue;
         };
-        let response = request_handler::handle_request(&new_request).unwrap_or_else(|err| err.into());
+        let response =
+            request_handler::handle_request(&new_request).unwrap_or_else(|err| err.into());
         tx1.send(response.into_bytes().as_ref()).unwrap();
     }
 }

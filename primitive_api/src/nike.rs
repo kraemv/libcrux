@@ -1,17 +1,17 @@
 use std::fmt::Debug;
 
-use crate::provider::get_agent;
 use crate::hkdf::HkdfIkm;
+use crate::provider::get_agent;
 use crate::{KeyID, NetworkObject};
 
 use libcrux_agent::kx::{SharedKey, X25519PublicKey, X25519SecretKey};
 use libcrux_curve25519 as curve25519;
 use libcrux_curve25519::ecdh_api::EcdhOwned;
 
-use rand::{SeedableRng, Rng};
-use rand::rngs::SysRng;
-use rand::rand_core::UnwrapErr;
 use libcrux_hmac_drbg::HmacDrbgSha256;
+use rand::rand_core::UnwrapErr;
+use rand::rngs::SysRng;
+use rand::{Rng, SeedableRng};
 
 /// NIKE Errors
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,23 +25,23 @@ pub enum Error {
 
 pub type DefaultNIKEKey = X25519SecretKey;
 
-pub trait Nike{}
+pub trait Nike {}
 
 #[derive(Clone, Debug)]
-pub struct X25519{}
+pub struct X25519 {}
 
 impl Nike for X25519 {}
 
 /// Minimal example:
 /// ```
 /// use libcrux_primitive_api::nike::*;
-/// 
+///
 /// let (sk_a, pk_a) = DefaultNIKEKey::keygen().expect("Keygen failed");
 /// let (sk_b, pk_b) = DefaultNIKEKey::keygen().expect("Keygen failed");
-/// 
+///
 /// let shk_a = sk_a.derive(pk_b).expect("Derive failed");
 /// let shk_b = sk_b.derive(pk_a).expect("Derive failed");
-/// 
+///
 /// assert_eq!(shk_a, shk_b)
 /// ```
 pub trait NIKESecretKey: Send + Sync + Sized {
@@ -70,7 +70,7 @@ impl NIKESecretKey for KeyID<X25519> {
         get_agent()
             .ok_or_else(|| Error::Internal("No agent available".into()))?
             .x25519_generate_key_id()
-            .map(|(id, pk)| {(Self::new(id), pk)})
+            .map(|(id, pk)| (Self::new(id), pk))
             .map_err(|_| Error::KeyGen)
     }
 
@@ -89,7 +89,10 @@ impl NIKESecretKey for X25519SecretKey {
     const SCHEME: NIKEScheme = NIKEScheme::X25519;
 
     fn keygen() -> Result<(Self, Self::PublicKey), Error> {
-        let mut rng = UnwrapErr(HmacDrbgSha256::try_from_rng(&mut SysRng).map_err(|_| Error::Internal("RNG init failed".into()))?);
+        let mut rng = UnwrapErr(
+            HmacDrbgSha256::try_from_rng(&mut SysRng)
+                .map_err(|_| Error::Internal("RNG init failed".into()))?,
+        );
         let mut rand = [0u8; 32];
         rng.fill_bytes(&mut rand);
         let (pub_key, priv_key) =
@@ -104,5 +107,5 @@ impl NIKESecretKey for X25519SecretKey {
         X25519SecretKey::derive(&self, &pk).map_err(|_| Error::Derive)
     }
 }
-impl NetworkObject for X25519PublicKey{}
-impl NetworkObject for SharedKey{}
+impl NetworkObject for X25519PublicKey {}
+impl NetworkObject for SharedKey {}

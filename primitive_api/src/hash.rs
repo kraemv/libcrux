@@ -11,13 +11,13 @@ pub type DefaultHash = libcrux_sha2::Sha256;
 /// ```
 /// use libcrux_primitive_api::hash::*;
 /// use libcrux_traits::Digest;
-/// 
+///
 /// let msg = b"Insight must precede application";
 /// let mut digest = [0u8; 32];
-/// 
+///
 /// DefaultHash::hash(&mut digest, msg)
 /// ```
-pub trait Hash<const N: usize>: Digest<N> + Send + Sync{
+pub trait Hash<const N: usize>: Digest<N> + Send + Sync {
     const SCHEME: HashAlgo;
 
     fn init() -> Self;
@@ -25,11 +25,11 @@ pub trait Hash<const N: usize>: Digest<N> + Send + Sync{
     fn fork(&self) -> Self;
 }
 
-impl Hash<{libcrux_sha2::SHA256_LENGTH}> for libcrux_sha2::Sha256 {
+impl Hash<{ libcrux_sha2::SHA256_LENGTH }> for libcrux_sha2::Sha256 {
     const SCHEME: HashAlgo = HashAlgo::Sha2_256;
 
     fn init() -> Self {
-        libcrux_sha2::Sha256::new()    
+        libcrux_sha2::Sha256::new()
     }
 
     fn fork(&self) -> Self {

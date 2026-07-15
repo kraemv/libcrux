@@ -7,9 +7,9 @@ use zerocopy::*;
 
 use crate::Error;
 use libcrux_agent::key_store::*;
+use libcrux_agent::messages::*;
 use libcrux_agent::signatures::*;
 use libcrux_agent::signing_messages::*;
-use libcrux_agent::messages::*;
 
 use std::env;
 use std::io::Write;
@@ -31,10 +31,7 @@ pub(crate) fn handle_request(request: &IPCSetupRequest) -> Result<IPCSetupRespon
                 .map_err(|_| Error::MalformedRequest)?;
             import_ed25519_key(key.get_private_key()).map(|res| IPCSetupResponse::from(&res))
         }
-        SetupMessageKind::Error => {
-            Err(Error::IO)
-        }
-
+        SetupMessageKind::Error => Err(Error::IO),
     }
 }
 
@@ -57,7 +54,9 @@ fn init_agent() -> Result<(), Error> {
     // Draw a random root key and encode it in b64 for the root file
     let mut root_key = [0u8; 32];
     let mut b64_encoded_key = [0u8; 44];
-    SysRng.try_fill_bytes(&mut root_key).map_err(|_| Error::IO)?;
+    SysRng
+        .try_fill_bytes(&mut root_key)
+        .map_err(|_| Error::IO)?;
     Base64::encode(&root_key, &mut b64_encoded_key).map_err(|_| Error::Encoding)?;
 
     // Write the key to the root file
@@ -85,7 +84,9 @@ fn register_key(id: &ID, key_bytes: &[u8], key_label: &[u8]) -> Result<(), Error
     Ok(())
 }
 
-fn import_ecdsa_p256_key(key: EcDsaP256PrivateKey<SHA256>) -> Result<SetupResponse<EcDsaP256PublicKey<SHA256>>, Error> {
+fn import_ecdsa_p256_key(
+    key: EcDsaP256PrivateKey<SHA256>,
+) -> Result<SetupResponse<EcDsaP256PublicKey<SHA256>>, Error> {
     let key_bytes = *key.as_bytes();
     let (id, pk) = KEY_STORE.ecdsa_p256_add_key(key)?;
     register_key(&id, &key_bytes, b"ECDSA_NISTP256_SHA256")?;

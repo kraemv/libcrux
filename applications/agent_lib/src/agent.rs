@@ -2,8 +2,6 @@ use ipc_channel::ipc::{IpcBytesReceiver, IpcBytesSender, IpcOneShotServer};
 use std::process::Command;
 use zerocopy::TryFromBytes;
 
-use crate::rng_messages::EntropyRequest;
-use crate::{Error, ID};
 use crate::aead::{AeadTag, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN};
 use crate::aead_messages::*;
 use crate::hkdf_messages::*;
@@ -12,10 +10,13 @@ use crate::hmac_messages::{HmacRequest, HmacResponse};
 use crate::kex_messages::*;
 use crate::kx::{MlKem768Ciphertext, MlKem768PublicKey, X25519PublicKey};
 use crate::messages::*;
+use crate::rng_messages::EntropyRequest;
 use crate::signatures::{
-        EcDsaP256PrivateKey, EcDsaP256PublicKey, EcDsaP256SHA256, EcDsaP256Signature, Ed25519, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature, SHA256
-    };
+    EcDsaP256PrivateKey, EcDsaP256PublicKey, EcDsaP256SHA256, EcDsaP256Signature, Ed25519,
+    Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature, SHA256,
+};
 use crate::signing_messages::*;
+use crate::{Error, ID};
 
 // Type aliases for libcrux ML-KEM types to avoid repetition
 type LibcruxMlKem768PublicKey = libcrux_ml_kem::mlkem768::MlKem768PublicKey;
@@ -73,9 +74,10 @@ impl Agent {
 
     fn expect_kind(response: &IPCResponse, expected: MessageKind) -> Result<&[u8], Error> {
         match response.get_header().get_type() {
-            MessageKind::Error => Err(Error::try_read_from_bytes(response.get_payload()).map_err(|_| Error::MalformedResponse)?),
+            MessageKind::Error => Err(Error::try_read_from_bytes(response.get_payload())
+                .map_err(|_| Error::MalformedResponse)?),
             kind if kind == expected => Ok(response.get_payload()),
-            _ => Err(Error::MalformedResponse)
+            _ => Err(Error::MalformedResponse),
         }
     }
 
@@ -114,8 +116,9 @@ impl Agent {
 
         match response.get_header().get_type() {
             SetupMessageKind::EcDsaP256Key => {
-                let r = SetupResponse::<EcDsaP256PublicKey<SHA256>>::try_from(response.get_payload())
-                    .map_err(|_| Error::MalformedResponse)?;
+                let r =
+                    SetupResponse::<EcDsaP256PublicKey<SHA256>>::try_from(response.get_payload())
+                        .map_err(|_| Error::MalformedResponse)?;
                 Ok((r.get_id().clone(), EcDsaP256PublicKey::<SHA256>::from(r)))
             }
             _ => Err(Error::MalformedResponse),
@@ -140,7 +143,6 @@ impl Agent {
         }
     }
 
-
     // -------------------------------------------------------------------------
     // Entropy
     // -------------------------------------------------------------------------
@@ -156,8 +158,21 @@ impl Agent {
     // ChaCha20Poly1305
     // -------------------------------------------------------------------------
 
-    pub fn chacha20poly1305_decrypt_for_id<'a>(&self, id: ID, plaintext: &'a mut [u8], nonce: [u8; CHACHA_NONCE_LEN], tag: [u8; CHACHA_TAG_LEN], ciphertext: &[u8], aad: &[u8]) -> Result<&'a [u8], Error>{
-        let request = IPCRequest::from(AeadDecryptRequest::<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>::new(id, ciphertext, tag, nonce, aad));
+    pub fn chacha20poly1305_decrypt_for_id<'a>(
+        &self,
+        id: ID,
+        plaintext: &'a mut [u8],
+        nonce: [u8; CHACHA_NONCE_LEN],
+        tag: [u8; CHACHA_TAG_LEN],
+        ciphertext: &[u8],
+        aad: &[u8],
+    ) -> Result<&'a [u8], Error> {
+        let request = IPCRequest::from(AeadDecryptRequest::<
+            '_,
+            ChaCha20Poly1305,
+            CHACHA_NONCE_LEN,
+            CHACHA_TAG_LEN,
+        >::new(id, ciphertext, tag, nonce, aad));
         let response = self.send_recv(request)?;
 
         let payload = Self::expect_kind(&response, MessageKind::ChaCha20Poly1305Decrypt)?;
@@ -166,8 +181,20 @@ impl Agent {
         Ok(plaintext)
     }
 
-    pub fn chacha20poly1305_encrypt_for_id<'a>(&self, id: ID, ciphertext: &'a mut [u8], nonce: [u8; CHACHA_NONCE_LEN], plaintext: &[u8], aad: &[u8]) -> Result<(&'a [u8], AeadTag<CHACHA_TAG_LEN>), Error>{
-        let request = IPCRequest::from(AeadEncryptRequest::<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>::new(id, plaintext, nonce, aad));
+    pub fn chacha20poly1305_encrypt_for_id<'a>(
+        &self,
+        id: ID,
+        ciphertext: &'a mut [u8],
+        nonce: [u8; CHACHA_NONCE_LEN],
+        plaintext: &[u8],
+        aad: &[u8],
+    ) -> Result<(&'a [u8], AeadTag<CHACHA_TAG_LEN>), Error> {
+        let request = IPCRequest::from(AeadEncryptRequest::<
+            '_,
+            ChaCha20Poly1305,
+            CHACHA_NONCE_LEN,
+            CHACHA_TAG_LEN,
+        >::new(id, plaintext, nonce, aad));
         let response = self.send_recv(request)?;
 
         let payload = Self::expect_kind(&response, MessageKind::ChaCha20Poly1305Encrypt)?;
@@ -186,18 +213,19 @@ impl Agent {
         id: ID,
         message: &[u8],
     ) -> Result<EcDsaP256Signature<SHA256>, Error> {
-        let response = self.send_recv(IPCRequest::from(SignRequest::<EcDsaP256SHA256>::new(id, message)))?;
+        let response = self.send_recv(IPCRequest::from(SignRequest::<EcDsaP256SHA256>::new(
+            id, message,
+        )))?;
         let payload = Self::expect_kind(&response, MessageKind::EcDsaP256Sign)?;
-        let r = SignResponse::try_ref_from_bytes(payload)
-            .map_err(|_| Error::MalformedResponse)?;
+        let r = SignResponse::try_ref_from_bytes(payload).map_err(|_| Error::MalformedResponse)?;
         Ok(EcDsaP256Signature::from(r))
     }
 
     pub fn ed25519_sign_for_id(&self, id: ID, message: &[u8]) -> Result<Ed25519Signature, Error> {
-        let response = self.send_recv(IPCRequest::from(SignRequest::<Ed25519>::new(id, message)))?;
+        let response =
+            self.send_recv(IPCRequest::from(SignRequest::<Ed25519>::new(id, message)))?;
         let payload = Self::expect_kind(&response, MessageKind::Ed25519Sign)?;
-        let r = SignResponse::try_ref_from_bytes(payload)
-            .map_err(|_| Error::MalformedResponse)?;
+        let r = SignResponse::try_ref_from_bytes(payload).map_err(|_| Error::MalformedResponse)?;
         Ok(Ed25519Signature::from(r))
     }
 
@@ -278,15 +306,23 @@ impl Agent {
     }
 
     pub fn hkdf_expand(&self, id: ID, output_len: usize, info: &[u8]) -> Result<ID, Error> {
-        let response = self.send_recv(IPCRequest::from(HkdfExpandRequest::new(id, output_len, info)))?;
+        let response = self.send_recv(IPCRequest::from(HkdfExpandRequest::new(
+            id, output_len, info,
+        )))?;
         let payload = Self::expect_kind(&response, MessageKind::HkdfExpand)?;
         let r = HkdfResponse::<HkdfExpand>::try_ref_from_bytes(payload)
             .map_err(|_| Error::MalformedResponse)?;
         Ok(r.get_id().clone())
     }
 
-    pub fn hmac_sha2_256_authenticate(&self, id: ID, message: &[u8]) -> Result<HmacSha256Mac, Error> {
-        let response = self.send_recv(IPCRequest::from(HmacRequest::<Sha2_256HMAC>::new(id, message)))?;
+    pub fn hmac_sha2_256_authenticate(
+        &self,
+        id: ID,
+        message: &[u8],
+    ) -> Result<HmacSha256Mac, Error> {
+        let response = self.send_recv(IPCRequest::from(HmacRequest::<Sha2_256HMAC>::new(
+            id, message,
+        )))?;
         let payload = Self::expect_kind(&response, MessageKind::HmacSha2_256Authenticate)?;
         let r = HmacResponse::<HmacSha256Mac>::try_ref_from_bytes(payload)
             .map_err(|_| Error::MalformedResponse)?;

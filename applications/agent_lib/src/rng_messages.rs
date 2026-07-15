@@ -2,7 +2,7 @@ pub struct EntropyRequest<'a> {
     entropy: &'a [u8],
 }
 
-impl<'a> From<&'a[u8]> for EntropyRequest<'a> {
+impl<'a> From<&'a [u8]> for EntropyRequest<'a> {
     fn from(entropy: &'a [u8]) -> Self {
         Self { entropy }
     }

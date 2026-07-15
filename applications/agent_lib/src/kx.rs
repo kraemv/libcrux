@@ -89,7 +89,8 @@ impl X25519SecretKey {
         &self.0
     }
     pub fn derive(&self, pk: &X25519PublicKey) -> Result<SharedKey, crate::Error> {
-        curve25519::X25519::derive_ecdh(&pk.0, &self.0).map_err(|_| Error::Derive)
+        curve25519::X25519::derive_ecdh(&pk.0, &self.0)
+            .map_err(|_| Error::Derive)
             .map(SharedKey)
     }
 }
@@ -135,7 +136,6 @@ impl TryFrom<&[u8]> for SharedKey {
 }
 
 impl AsRef<[u8]> for SharedKey {
-
     fn as_ref(&self) -> &[u8] {
         &self.0
     }

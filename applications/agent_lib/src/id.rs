@@ -1,13 +1,15 @@
 use std::marker::PhantomData;
 
+use crate::Error;
 use heapless::Vec;
 use zerocopy::*;
-use crate::Error;
 
 pub(crate) const ID_SIZE: usize = 31;
 pub(crate) type InnerRndBytes = Vec<u8, 64>;
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned)]
+#[derive(
+    Clone, Debug, Hash, PartialEq, Eq, FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned,
+)]
 #[repr(C)]
 pub struct ID([u8; ID_SIZE]);
 
@@ -46,12 +48,15 @@ pub enum ConversionError {
 #[repr(C)]
 pub struct KeyID<Scheme> {
     id: ID,
-    scheme: PhantomData<Scheme>
+    scheme: PhantomData<Scheme>,
 }
 
 impl<Scheme> KeyID<Scheme> {
     pub fn new(id: ID) -> Self {
-        Self { id, scheme: PhantomData }
+        Self {
+            id,
+            scheme: PhantomData,
+        }
     }
 
     pub fn get_id(&self) -> &ID {
@@ -70,7 +75,10 @@ impl<Scheme> TryFrom<&[u8]> for KeyID<Scheme> {
 impl<Scheme> From<[u8; ID_SIZE]> for KeyID<Scheme> {
     fn from(source: [u8; ID_SIZE]) -> Self {
         let id = ID::read_from_bytes(&source).unwrap();
-        KeyID::<Scheme> { id, scheme: PhantomData }
+        KeyID::<Scheme> {
+            id,
+            scheme: PhantomData,
+        }
     }
 }
 
@@ -80,7 +88,7 @@ impl<Scheme> From<KeyID<Scheme>> for [u8; ID_SIZE] {
     }
 }
 
-impl <Schme> AsRef<[u8]> for KeyID<Schme> {
+impl<Schme> AsRef<[u8]> for KeyID<Schme> {
     fn as_ref(&self) -> &[u8] {
         self.as_bytes()
     }

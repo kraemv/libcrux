@@ -7,8 +7,8 @@ use ipc_channel::IpcError;
 use libcrux_agent::messages::IPCRequest;
 use libcrux_agent::Error;
 use libcrux_hmac_drbg::HmacDrbgSha256;
-use rand::SeedableRng;
 use rand::rngs::SysRng;
+use rand::SeedableRng;
 use std::env;
 use std::sync::{LazyLock, RwLock};
 
@@ -34,7 +34,8 @@ fn main() {
         let Ok(mut new_request) = IPCRequest::try_from(new_request.as_ref()) else {
             continue;
         };
-        let response = request_handler::handle_request(&mut new_request).unwrap_or_else(|err| err.into());
+        let response =
+            request_handler::handle_request(&mut new_request).unwrap_or_else(|err| err.into());
         tx1.send(response.into_bytes().as_ref()).unwrap();
     }
 }

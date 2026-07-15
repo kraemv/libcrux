@@ -1,11 +1,11 @@
 use std::marker::PhantomData;
 
 use crate::{
-    Error, ID, ID_SIZE,
     signatures::{
-        EcDsaP256PrivateKey, EcDsaP256PublicKey, EcDsaP256SHA256, EcDsaP256Signature,
-        Ed25519, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature, SHA256,
+        EcDsaP256PrivateKey, EcDsaP256PublicKey, EcDsaP256SHA256, EcDsaP256Signature, Ed25519,
+        Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature, SHA256,
     },
+    Error, ID, ID_SIZE,
 };
 
 use libcrux_ecdsa as ecdsa;
@@ -63,7 +63,11 @@ impl From<DigestAlgorithm> for Algorithm {
 
 impl<'a, Scheme> SignRequest<'a, Scheme> {
     pub fn new(id: ID, message: &'a [u8]) -> Self {
-        Self { id, message, _marker: PhantomData }
+        Self {
+            id,
+            message,
+            _marker: PhantomData,
+        }
     }
 
     pub fn get_id(&self) -> &ID {
@@ -83,7 +87,11 @@ impl<'a, Scheme> TryFrom<&'a [u8]> for SignRequest<'a, Scheme> {
             .split_at_checked(crate::ID_SIZE)
             .ok_or(Error::MalformedRequest)?;
         let id: ID = id.try_into().expect("No panic here!");
-        Ok(Self { id, message, _marker: PhantomData })
+        Ok(Self {
+            id,
+            message,
+            _marker: PhantomData,
+        })
     }
 }
 
@@ -98,7 +106,10 @@ impl<'a, Scheme> From<SignRequest<'a, Scheme>> for Vec<u8> {
 impl From<EcDsaP256Signature<SHA256>> for SignResponse<EcDsaP256SHA256> {
     fn from(sig: EcDsaP256Signature<SHA256>) -> Self {
         let signature = *sig.get_signature().as_bytes();
-        Self { signature, _marker: PhantomData }
+        Self {
+            signature,
+            _marker: PhantomData,
+        }
     }
 }
 
@@ -111,7 +122,10 @@ impl From<&SignResponse<EcDsaP256SHA256>> for EcDsaP256Signature<SHA256> {
 
 impl From<Ed25519Signature> for SignResponse<Ed25519> {
     fn from(sig: Ed25519Signature) -> Self {
-        Self { signature: sig.into_bytes(), _marker: PhantomData }
+        Self {
+            signature: sig.into_bytes(),
+            _marker: PhantomData,
+        }
     }
 }
 
@@ -232,13 +246,19 @@ impl SetupRequest<Ed25519> {
 
 impl From<&EcDsaP256PrivateKey<SHA256>> for SetupRequest<EcDsaP256SHA256> {
     fn from(key: &EcDsaP256PrivateKey<SHA256>) -> Self {
-        Self { sk: *key.as_bytes(), _marker: PhantomData }
+        Self {
+            sk: *key.as_bytes(),
+            _marker: PhantomData,
+        }
     }
 }
 
 impl From<&Ed25519PrivateKey> for SetupRequest<Ed25519> {
     fn from(key: &Ed25519PrivateKey) -> Self {
-        Self { sk: *key.as_bytes(), _marker: PhantomData }
+        Self {
+            sk: *key.as_bytes(),
+            _marker: PhantomData,
+        }
     }
 }
 

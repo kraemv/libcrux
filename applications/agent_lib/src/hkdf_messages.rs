@@ -3,9 +3,9 @@ use std::marker::PhantomData;
 use crate::{Error, ID};
 use zerocopy::*;
 
-pub struct HkdfExtractPublicSalt{}
-pub struct HkdfExtractSecretSalt{}
-pub struct HkdfExpand{}
+pub struct HkdfExtractPublicSalt {}
+pub struct HkdfExtractSecretSalt {}
+pub struct HkdfExpand {}
 
 #[derive(Clone, IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
 #[repr(u8)]
@@ -39,8 +39,7 @@ pub struct HkdfResponse<Event> {
 }
 
 impl<'a> HkdfExtractPublicRequest<'a> {
-    pub fn new(id: ID, salt: &'a [u8]) -> Self 
-    {
+    pub fn new(id: ID, salt: &'a [u8]) -> Self {
         Self { id, salt }
     }
 
@@ -54,8 +53,7 @@ impl<'a> HkdfExtractPublicRequest<'a> {
 }
 
 impl HkdfExtractSecretRequest {
-    pub fn new(id: Option<ID>, salt: ID) -> Self 
-    {
+    pub fn new(id: Option<ID>, salt: ID) -> Self {
         Self { id, salt }
     }
 
@@ -72,10 +70,9 @@ impl<'a> TryFrom<&'a [u8]> for HkdfExtractPublicRequest<'a> {
     type Error = Error;
 
     fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
-
         let (id, salt) = ID::try_read_from_prefix(bytes).map_err(|_| Error::MalformedRequest)?;
 
-        Ok(Self {id, salt })
+        Ok(Self { id, salt })
     }
 }
 
@@ -86,9 +83,13 @@ impl<'a> TryFrom<&'a [u8]> for HkdfExtractSecretRequest {
 
     fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
         let (salt, key) = match bytes.len() {
-            ID_SIZE => (ID::try_read_from_bytes(bytes).map_err(|_| Error::MalformedRequest)?, None),
+            ID_SIZE => (
+                ID::try_read_from_bytes(bytes).map_err(|_| Error::MalformedRequest)?,
+                None,
+            ),
             _ => {
-                let (salt, bytes) = ID::try_read_from_prefix(bytes).map_err(|_| Error::MalformedRequest)?;
+                let (salt, bytes) =
+                    ID::try_read_from_prefix(bytes).map_err(|_| Error::MalformedRequest)?;
                 let key = ID::try_read_from_bytes(bytes).map_err(|_| Error::MalformedRequest)?;
                 (salt, Some(key))
             }
@@ -98,10 +99,13 @@ impl<'a> TryFrom<&'a [u8]> for HkdfExtractSecretRequest {
     }
 }
 
-
 impl<'a> HkdfExpandRequest<'a> {
     pub fn new(id: ID, output_len: usize, info: &'a [u8]) -> Self {
-        Self { id, output_len, info }
+        Self {
+            id,
+            output_len,
+            info,
+        }
     }
 
     pub fn get_id(&self) -> &ID {
@@ -122,9 +126,14 @@ impl<'a> TryFrom<&'a [u8]> for HkdfExpandRequest<'a> {
 
     fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
         let (id, bytes) = ID::try_read_from_prefix(bytes).map_err(|_| Error::MalformedRequest)?;
-        let (output_len, info) = usize::try_read_from_prefix(bytes).map_err(|_| Error::MalformedRequest)?;
+        let (output_len, info) =
+            usize::try_read_from_prefix(bytes).map_err(|_| Error::MalformedRequest)?;
 
-        Ok(Self { id, output_len, info })
+        Ok(Self {
+            id,
+            output_len,
+            info,
+        })
     }
 }
 
@@ -140,7 +149,10 @@ impl From<HkdfExpandRequest<'_>> for Vec<u8> {
 
 impl<Event> HkdfResponse<Event> {
     pub fn new(id: ID) -> Self {
-        Self { id, event: PhantomData }
+        Self {
+            id,
+            event: PhantomData,
+        }
     }
 
     pub fn get_id(&self) -> &ID {

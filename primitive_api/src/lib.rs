@@ -13,8 +13,8 @@ pub type RandomKey = Vec<u8>;
 
 pub trait Implementation {}
 
-pub struct Lib{}
-pub struct AgentLib{}
+pub struct Lib {}
+pub struct AgentLib {}
 
 impl Implementation for Lib {}
 impl Implementation for AgentLib {}
@@ -23,4 +23,4 @@ pub trait NetworkObject: Send + Sync + Sized + AsRef<[u8]> + for<'a> TryFrom<&'a
 
 impl NetworkObject for Vec<u8> {}
 
-impl<Scheme: Send + Sync> NetworkObject for KeyID<Scheme>{}
+impl<Scheme: Send + Sync> NetworkObject for KeyID<Scheme> {}
