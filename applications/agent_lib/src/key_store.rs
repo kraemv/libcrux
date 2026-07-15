@@ -346,7 +346,7 @@ impl KeyStore<EphemeralKey> {
         };
         match key {
             EphemeralKey::RandomBytes(bytes) => {
-                Ok(bytes.as_ref().try_into().map_err(|_| Error::HKDF)?)
+                Ok(*bytes.as_ref().as_array().ok_or( Error::Unsupported)?)
             }
             _ => Err(Error::Unsupported),
         }
@@ -424,10 +424,9 @@ impl KeyStore<LongTermKey> {
                     store.ecdsa_p256_add_key(ecdsa_key).map(|(id, _)| id)
                 }
                 b"ED_25519" => {
-                    let secret_scalar: [u8; 32] = key_bytes
-                        .as_slice()
-                        .try_into()
-                        .map_err(|_| Error::Encoding)?;
+                    let secret_scalar: [u8; 32] = *key_bytes
+                        .as_array()
+                        .ok_or( Error::Encoding)?;
                     let private_key =
                         Ed25519PrivateKey::new(ed25519::SigningKey::from_bytes(secret_scalar));
                     store.ed25519_add_key(private_key).map(|(id, _)| id)
