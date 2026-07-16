@@ -30,7 +30,7 @@ pub struct Agent {
 impl Agent {
     pub fn connect_agent(agent_path: String) -> Result<Self, Error> {
         unsafe {
-            libc::umask(0o007);
+            libc::umask(0o117);
         }
 
         std::env::set_var("TMPDIR", "/tmp/ipcdir");

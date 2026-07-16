@@ -120,24 +120,27 @@ impl<'a, Scheme, const TAG_LEN: usize> AeadEncryptResponse<'a, Scheme, TAG_LEN> 
     }
 }
 
-impl<'a, Scheme, const NONCE_LEN: usize, const TAG_LEN: usize> TryFrom<&'a mut [u8]>
+impl<'a, Scheme, const NONCE_LEN: usize, const TAG_LEN: usize> TryFrom<&'a [u8]>
     for AeadEncryptRequest<'a, Scheme, NONCE_LEN, TAG_LEN>
 {
     type Error = Error;
 
-    fn try_from(request: &'a mut [u8]) -> Result<Self, Self::Error> {
-        let (plaintext_len, request_slice) =
-            usize::try_read_from_prefix(request).map_err(|_| Error::MalformedRequest)?;
+    fn try_from(request: &'a [u8]) -> Result<Self, Self::Error> {
+        let (id, request_slice) =
+            ID::try_read_from_prefix(request)
+                .map_err(|_| Error::MalformedRequest)?;
 
-        let (plaintext, request_slice) = request_slice
+        let (nonce, request_slice) = 
+            <[u8; NONCE_LEN]>::try_read_from_prefix(request_slice)
+                .map_err(|_| Error::MalformedRequest)?;
+
+        let (plaintext_len, request_slice) =
+            usize::try_read_from_prefix(request_slice)
+                .map_err(|_| Error::MalformedRequest)?;
+
+        let (plaintext, aad) = request_slice
             .split_at_checked(plaintext_len)
             .ok_or(Error::MalformedRequest)?;
-
-        let (id, request_slice) =
-            ID::try_read_from_prefix(request_slice).map_err(|_| Error::MalformedRequest)?;
-
-        let (nonce, aad) = <[u8; NONCE_LEN]>::try_read_from_prefix(request_slice)
-            .map_err(|_| Error::MalformedRequest)?;
 
         Ok(Self {
             plaintext,
@@ -171,10 +174,10 @@ impl<'a, Scheme, const NONCE_LEN: usize, const TAG_LEN: usize>
     From<AeadEncryptRequest<'a, Scheme, NONCE_LEN, TAG_LEN>> for Vec<u8>
 {
     fn from(request: AeadEncryptRequest<'a, Scheme, NONCE_LEN, TAG_LEN>) -> Self {
-        let mut result = request.plaintext.len().as_bytes().to_vec();
-        result.extend(request.plaintext);
-        result.extend(request.id.as_bytes());
+        let mut result = request.id.as_bytes().to_vec();
         result.extend(request.nonce.as_bytes());
+        result.extend(request.plaintext.len().as_bytes());
+        result.extend(request.plaintext);
         result.extend(request.aad);
 
         result
@@ -234,26 +237,27 @@ impl<'a, Scheme, const NONCE_LEN: usize, const TAG_LEN: usize>
     }
 }
 
-impl<'a, Scheme, const NONCE_LEN: usize, const TAG_LEN: usize> TryFrom<&'a mut [u8]>
+impl<'a, Scheme, const NONCE_LEN: usize, const TAG_LEN: usize> TryFrom<&'a [u8]>
     for AeadDecryptRequest<'a, Scheme, NONCE_LEN, TAG_LEN>
 {
     type Error = Error;
 
-    fn try_from(request: &'a mut [u8]) -> Result<Self, Self::Error> {
+    fn try_from(request: &'a [u8]) -> Result<Self, Self::Error> {
+        let (id, request_slice) =
+            ID::try_read_from_prefix(request).map_err(|_| Error::MalformedRequest)?;
+
+        let (nonce, request_slice) = <[u8; NONCE_LEN]>::try_read_from_prefix(request_slice)
+            .map_err(|_| Error::MalformedRequest)?;
+
         let (tag, request_slice) =
-            <[u8; TAG_LEN]>::try_read_from_prefix(request).map_err(|_| Error::MalformedRequest)?;
+            <[u8; TAG_LEN]>::try_read_from_prefix(request_slice).map_err(|_| Error::MalformedRequest)?;
+
         let (ciphertext_len, request_slice) =
             usize::try_read_from_prefix(request_slice).map_err(|_| Error::MalformedRequest)?;
 
-        let (ciphertext, request_slice) = request_slice
+        let (ciphertext, aad) = request_slice
             .split_at_checked(ciphertext_len)
             .ok_or(Error::MalformedRequest)?;
-
-        let (id, request_slice) =
-            ID::try_read_from_prefix(request_slice).map_err(|_| Error::MalformedRequest)?;
-
-        let (nonce, aad) = <[u8; NONCE_LEN]>::try_read_from_prefix(request_slice)
-            .map_err(|_| Error::MalformedRequest)?;
 
         Ok(Self {
             tag,
@@ -279,11 +283,11 @@ impl<'a, Scheme, const NONCE_LEN: usize, const TAG_LEN: usize>
     From<AeadDecryptRequest<'a, Scheme, NONCE_LEN, TAG_LEN>> for Vec<u8>
 {
     fn from(request: AeadDecryptRequest<'a, Scheme, NONCE_LEN, TAG_LEN>) -> Self {
-        let mut result = request.tag.to_vec();
+        let mut result = request.id.as_bytes().to_vec();
+        result.extend(request.nonce.as_bytes());
+        result.extend(request.tag.as_ref());
         result.extend(request.ciphertext.len().as_bytes());
         result.extend(request.ciphertext);
-        result.extend(request.id.as_bytes());
-        result.extend(request.nonce.as_bytes());
         result.extend(request.aad);
 
         result

@@ -31,11 +31,11 @@ fn main() {
             Err(IpcError::Disconnected) => break,
             Err(_) => continue,
         };
-        let Ok(mut new_request) = IPCRequest::try_from(new_request.as_ref()) else {
+        let Ok(new_request) = IPCRequest::try_from(new_request.as_ref()) else {
             continue;
         };
         let response =
-            request_handler::handle_request(&mut new_request).unwrap_or_else(|err| err.into());
+            request_handler::handle_request(&new_request).unwrap_or_else(|err| err.into());
         tx1.send(response.into_bytes().as_ref()).unwrap();
     }
 }

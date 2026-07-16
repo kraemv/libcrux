@@ -12,21 +12,21 @@ use libcrux_agent::signatures::{EcDsaP256SHA256, Ed25519};
 use libcrux_agent::signing_messages::*;
 use zerocopy::*;
 
-pub(crate) fn handle_request(request: &mut IPCRequest) -> Result<IPCResponse, Error> {
+pub(crate) fn handle_request(request: & IPCRequest) -> Result<IPCResponse, Error> {
     match request.get_header().get_type() {
         MessageKind::ChaCha20Poly1305Decrypt => {
-            let mut request =
+            let request =
                 AeadDecryptRequest::<ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>::try_from(
-                    request.get_mut_payload(),
+                    request.get_payload(),
                 )?;
-            handle_chacha20poly1305_decrypt_request(&mut request)
+            handle_chacha20poly1305_decrypt_request(&request)
         }
         MessageKind::ChaCha20Poly1305Encrypt => {
-            let mut request =
+            let request =
                 AeadEncryptRequest::<ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>::try_from(
-                    request.get_mut_payload(),
+                    request.get_payload(),
                 )?;
-            handle_chacha20poly1305_encrypt_request(&mut request)
+            handle_chacha20poly1305_encrypt_request(&request)
         }
         MessageKind::EcDsaP256Sign => {
             let request = SignRequest::<EcDsaP256SHA256>::try_from(request.get_payload())?;
@@ -97,7 +97,7 @@ pub(crate) fn handle_request(request: &mut IPCRequest) -> Result<IPCResponse, Er
 }
 
 pub(crate) fn handle_chacha20poly1305_decrypt_request(
-    request: &mut AeadDecryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>,
+    request: &AeadDecryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>,
 ) -> Result<IPCResponse, Error> {
     let id = request.get_id();
     let nonce = request.get_nonce();
@@ -110,7 +110,7 @@ pub(crate) fn handle_chacha20poly1305_decrypt_request(
 }
 
 pub(crate) fn handle_chacha20poly1305_encrypt_request(
-    request: &mut AeadEncryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>,
+    request: &AeadEncryptRequest<'_, ChaCha20Poly1305, CHACHA_NONCE_LEN, CHACHA_TAG_LEN>,
 ) -> Result<IPCResponse, Error> {
     let id = request.get_id();
     let nonce = request.get_nonce();

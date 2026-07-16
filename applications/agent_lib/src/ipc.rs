@@ -53,10 +53,6 @@ impl<K: Copy + IntoBytes + Immutable> IpcMessage<K> {
         &self.payload
     }
 
-    pub fn get_mut_payload(&mut self) -> &mut [u8] {
-        self.payload.as_mut_slice()
-    }
-
     pub fn into_bytes(self) -> Vec<u8> {
         let mut buffer = self.header.as_bytes().to_vec();
         buffer.extend(self.payload);

@@ -7,13 +7,6 @@ pub struct HkdfExtractPublicSalt {}
 pub struct HkdfExtractSecretSalt {}
 pub struct HkdfExpand {}
 
-#[derive(Clone, IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
-#[repr(u8)]
-pub enum HkdfExtractHeader {
-    KeyAbsent,
-    KeyExists,
-}
-
 pub struct HkdfExtractPublicRequest<'a> {
     id: ID,
     salt: &'a [u8],
