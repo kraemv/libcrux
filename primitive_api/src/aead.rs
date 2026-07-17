@@ -1,9 +1,11 @@
 use libcrux_chacha20poly1305 as chacha20poly1305;
+use zeroize::ZeroizeOnDrop;
 
 use crate::provider::get_agent;
 use crate::{KeyID, NetworkObject};
 pub use libcrux_agent::aead::ChaCha20Poly1305;
-use libcrux_agent::aead::{AeadNonce, AeadTag};
+use libcrux_agent::aead::{AeadNonce, AeadTag, ChaCha20Poly1305Key};
+use libcrux_agent::Error as AgentError;
 
 #[derive(Debug)]
 pub enum Error {
@@ -18,20 +20,18 @@ pub enum AEADAlgorithm {
     ChaCha20Poly1305,
 }
 
-pub type DefaultAEADKey = chacha20poly1305::Key;
+pub type DefaultAEADKey = ChaCha20Poly1305Key;
 
 /// Minimal example:
 /// ```
-/// use rand::{RngCore, SeedableRng};
-/// use rand_chacha::ChaChaRng;
-///
+/// use rand::{TryRng, rngs::SysRng};
 /// use libcrux_primitive_api::aead::*;
 ///
-/// let mut rng = ChaChaRng::from_os_rng();
+/// let mut rng = SysRng;
 /// let mut key_material = [0u8; 32];
 /// let mut nonce = [0u8; 12];
-/// rng.fill_bytes(&mut key_material);
-/// rng.fill_bytes(&mut nonce);
+/// rng.try_fill_bytes(&mut key_material).unwrap();
+/// rng.try_fill_bytes(&mut nonce).unwrap();
 ///
 /// let key = DefaultAEADKey::from(key_material);
 /// let nonce_1 = <DefaultAEADKey as AEADKey<32>>::Nonce::try_from(nonce).expect("Nonce generation failed");
@@ -42,8 +42,8 @@ pub type DefaultAEADKey = chacha20poly1305::Key;
 /// let aad = b"AEAD showcase";
 ///
 ///
-/// let (ct, tag) = key.encrypt_msg(&mut ct, nonce_1, aad, msg).expect("Encryption failed");
-/// let pt = match key.decrypt_msg(&mut pt, nonce_2, aad, ct, tag) {
+/// let (ct, tag) = key.encrypt(&mut ct, nonce_1, aad, msg).expect("Encryption failed");
+/// let pt = match key.decrypt(&mut pt, nonce_2, aad, ct, tag) {
 ///     Ok(msg) => msg,
 ///     Err(Error::InvalidTag) => return println!("Invalid Tag"),
 ///     Err(Error::Decrypt) => return println!("Decryption had an internal error"),
@@ -52,14 +52,14 @@ pub type DefaultAEADKey = chacha20poly1305::Key;
 ///
 /// assert_eq!(msg, pt)
 /// ```
-pub trait AEADKey<const KEY_SIZE: usize>: Send + Sync + From<[u8; KEY_SIZE]> {
+pub trait AEADKey<const KEY_SIZE: usize>: Send + Sync + From<[u8; KEY_SIZE]> + ZeroizeOnDrop{
     type Tag: NetworkObject;
     type Nonce: NetworkObject;
 
     const SCHEME: AEADAlgorithm;
     const KEY_LEN: usize;
 
-    fn encrypt_msg<'a>(
+    fn encrypt<'a>(
         &self,
         ct: &'a mut [u8],
         nonce: Self::Nonce,
@@ -67,7 +67,7 @@ pub trait AEADKey<const KEY_SIZE: usize>: Send + Sync + From<[u8; KEY_SIZE]> {
         plaintext: &[u8],
     ) -> Result<(&'a [u8], Self::Tag), Error>;
 
-    fn decrypt_msg<'a>(
+    fn decrypt<'a>(
         &self,
         pt: &'a mut [u8],
         nonce: Self::Nonce,
@@ -77,29 +77,24 @@ pub trait AEADKey<const KEY_SIZE: usize>: Send + Sync + From<[u8; KEY_SIZE]> {
     ) -> Result<&'a [u8], Error>;
 }
 
-impl AEADKey<{ chacha20poly1305::KEY_LEN }> for chacha20poly1305::Key {
+impl AEADKey<{ chacha20poly1305::KEY_LEN }> for ChaCha20Poly1305Key {
     type Tag = AeadTag<{ chacha20poly1305::TAG_LEN }>;
     type Nonce = AeadNonce<{ chacha20poly1305::NONCE_LEN }>;
 
     const SCHEME: AEADAlgorithm = AEADAlgorithm::ChaCha20Poly1305;
     const KEY_LEN: usize = chacha20poly1305::KEY_LEN;
 
-    fn encrypt_msg<'a>(
+    fn encrypt<'a>(
         &self,
         ct: &'a mut [u8],
         nonce: Self::Nonce,
         aad: &[u8],
         plaintext: &[u8],
     ) -> Result<(&'a [u8], Self::Tag), Error> {
-        let mut tag = chacha20poly1305::Tag::from([0u8; chacha20poly1305::TAG_LEN]);
-        let nonce_bytes: [u8; chacha20poly1305::NONCE_LEN] = nonce.into();
-        let nonce = nonce_bytes.into();
-        self.encrypt(ct, &mut tag, &nonce, aad, plaintext)
-            .map(|()| (&ct[..], (*tag.as_ref()).into()))
-            .map_err(|_| Error::Encrypt)
+        self.encrypt_msg(ct, nonce, aad, plaintext).map_err(|_| Error::Encrypt)
     }
 
-    fn decrypt_msg<'a>(
+    fn decrypt<'a>(
         &self,
         pt: &'a mut [u8],
         nonce: Self::Nonce,
@@ -107,11 +102,16 @@ impl AEADKey<{ chacha20poly1305::KEY_LEN }> for chacha20poly1305::Key {
         ciphertext: &[u8],
         tag: Self::Tag,
     ) -> Result<&'a [u8], Error> {
-        let nonce: [u8; chacha20poly1305::NONCE_LEN] = nonce.into();
-        let tag: [u8; chacha20poly1305::TAG_LEN] = tag.into();
-        self.decrypt(pt, &nonce.into(), aad, ciphertext, &tag.into())
-            .map_err(map_libcrux_decrypt_error)
-            .map(|()| &pt[..])
+        self.decrypt_msg(pt, nonce, aad, ciphertext, tag)
+            .map_err(map_library_error)
+    }
+}
+
+fn map_library_error(err: AgentError) -> Error {
+    match err {
+        AgentError::AEAD => Error::Decrypt,
+        AgentError::InvalidTag => Error::InvalidTag,
+        _ => Error::Internal("Internal Error occured".into()),
     }
 }
 
@@ -122,7 +122,7 @@ impl AEADKey<{ size_of::<KeyID<ChaCha20Poly1305>>() }> for KeyID<ChaCha20Poly130
     const SCHEME: AEADAlgorithm = AEADAlgorithm::ChaCha20Poly1305;
     const KEY_LEN: usize = chacha20poly1305::KEY_LEN;
 
-    fn encrypt_msg<'a>(
+    fn encrypt<'a>(
         &self,
         ct: &'a mut [u8],
         nonce: Self::Nonce,
@@ -142,7 +142,7 @@ impl AEADKey<{ size_of::<KeyID<ChaCha20Poly1305>>() }> for KeyID<ChaCha20Poly130
             .map_err(|_| Error::Encrypt)
     }
 
-    fn decrypt_msg<'a>(
+    fn decrypt<'a>(
         &self,
         pt: &'a mut [u8],
         nonce: Self::Nonce,
@@ -162,16 +162,6 @@ impl AEADKey<{ size_of::<KeyID<ChaCha20Poly1305>>() }> for KeyID<ChaCha20Poly130
                 aad,
             )
             .map_err(|_| Error::Decrypt)
-    }
-}
-
-fn map_libcrux_decrypt_error(err: libcrux_traits::aead::arrayref::DecryptError) -> Error {
-    match err {
-        libcrux_traits::aead::arrayref::DecryptError::InvalidTag => Error::InvalidTag,
-        libcrux_traits::aead::arrayref::DecryptError::Unknown => {
-            Error::Internal("Unknown Error".to_string())
-        }
-        _ => Error::Decrypt,
     }
 }
 

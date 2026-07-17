@@ -36,7 +36,7 @@ pub trait ProvideAuthenticator {
 
 impl ProvideAuthenticator for Ed25519VerificationKey {
     fn authenticator(&self) -> Authenticator {
-        Authenticator::Sig(SignatureVerificationKey::Ed25519(*self))
+        Authenticator::Sig(SignatureVerificationKey::Ed25519(self.clone()))
     }
 }
 

@@ -96,7 +96,7 @@ impl From<SigningKeyPair<'_>> for SignatureVerificationKey {
     fn from(value: SigningKeyPair<'_>) -> Self {
         match value {
             SigningKeyPair::Ed25519(_, verification_key) => {
-                SignatureVerificationKey::Ed25519(*verification_key)
+                SignatureVerificationKey::Ed25519(verification_key.clone())
             }
             SigningKeyPair::MlDsa65(_, mldsaverification_key) => {
                 SignatureVerificationKey::MlDsa65(Box::new(mldsaverification_key.clone()))

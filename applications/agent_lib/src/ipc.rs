@@ -68,11 +68,11 @@ where
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         let (header, rest) =
-            IpcHeader::<K>::try_read_from_prefix(value).map_err(|_| Error::MalformedRequest)?;
+            IpcHeader::<K>::try_read_from_prefix(value)?;
         let payload_len = header.get_len() as usize;
         let payload = rest
             .split_at_checked(payload_len)
-            .ok_or(Error::MalformedRequest)?
+            .ok_or(Error::MalformedMessage)?
             .0
             .to_vec();
         Ok(Self { header, payload })

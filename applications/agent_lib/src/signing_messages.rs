@@ -85,7 +85,7 @@ impl<'a, Scheme> TryFrom<&'a [u8]> for SignRequest<'a, Scheme> {
     fn try_from(request: &'a [u8]) -> Result<Self, Self::Error> {
         let (id, message) = request
             .split_at_checked(crate::ID_SIZE)
-            .ok_or(Error::MalformedRequest)?;
+            .ok_or(Error::MalformedMessage)?;
         let id: ID = id.try_into().expect("No panic here!");
         Ok(Self {
             id,
@@ -195,9 +195,9 @@ impl TryFrom<&[u8]> for SetupResponse<EcDsaP256PublicKey<SHA256>> {
     fn try_from(payload: &[u8]) -> Result<Self, Self::Error> {
         let (id, pk) = payload
             .split_at_checked(ID_SIZE)
-            .ok_or(Error::MalformedRequest)?;
-        let id = ID::try_from(id).map_err(|_| Error::MalformedRequest)?;
-        let pk: [u8; 64] = pk.try_into().map_err(|_| Error::MalformedRequest)?;
+            .ok_or(Error::MalformedMessage)?;
+        let id = ID::try_from(id)?;
+        let pk: [u8; 64] = pk.try_into().map_err(|_| Error::MalformedMessage)?;
         let pk = EcDsaP256PublicKey::<SHA256>::from(ecdsa::p256::PublicKey(pk));
         Ok(Self { id, pk })
     }
@@ -209,9 +209,9 @@ impl TryFrom<&[u8]> for SetupResponse<Ed25519PublicKey> {
     fn try_from(payload: &[u8]) -> Result<Self, Self::Error> {
         let (id, pk) = payload
             .split_at_checked(ID_SIZE)
-            .ok_or(Error::MalformedRequest)?;
-        let id = ID::try_from(id).map_err(|_| Error::MalformedRequest)?;
-        let pk: [u8; 32] = pk.try_into().map_err(|_| Error::MalformedRequest)?;
+            .ok_or(Error::MalformedMessage)?;
+        let id = ID::try_from(id)?;
+        let pk: [u8; 32] = pk.try_into().map_err(|_| Error::MalformedMessage)?;
         let pk = Ed25519PublicKey::new(ed25519::VerificationKey::from_bytes(pk));
         Ok(Self { id, pk })
     }
@@ -232,7 +232,7 @@ impl From<SetupResponse<Ed25519PublicKey>> for Ed25519PublicKey {
 impl SetupRequest<EcDsaP256SHA256> {
     pub fn get_private_key(&self) -> Result<EcDsaP256PrivateKey<SHA256>, Error> {
         let sk = libcrux_ecdsa::p256::PrivateKey::try_from(&self.sk)
-            .map_err(|_| Error::MalformedRequest)?;
+            .map_err(|_| Error::MalformedMessage)?;
         Ok(EcDsaP256PrivateKey::from(sk))
     }
 }

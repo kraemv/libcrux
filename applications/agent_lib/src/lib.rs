@@ -1,4 +1,7 @@
+use std::sync::PoisonError;
+
 use zerocopy::*;
+use libcrux_traits::ecdh::arrayref::GenerateSecretError;
 
 pub(crate) use id::{InnerRndBytes, ID_SIZE};
 pub use id::{KeyID, ID};
@@ -11,12 +14,12 @@ pub enum Error {
     DuplicateKey,
     Encoding,
     Expand,
+    InvalidTag,
     IO,
     HKDF,
     KeyExchange,
     MAC,
-    MalformedRequest,
-    MalformedResponse,
+    MalformedMessage,
     NoAgent,
     PublicKey,
     RNG,
@@ -24,6 +27,30 @@ pub enum Error {
     Sync,
     UnknownID,
     Unsupported,
+}
+
+impl<A, B: TryFromBytes> From<TryReadError<A, B>> for Error{
+    fn from(_: TryReadError<A, B>) -> Self {
+        Error::MalformedMessage
+    }
+}
+
+impl<A, B: TryFromBytes> From<TryCastError<A, B>> for Error{
+    fn from(_: TryCastError<A, B>) -> Self {
+        Error::MalformedMessage
+    }
+}
+
+impl<T> From<PoisonError<T>> for Error{
+    fn from(_: PoisonError<T>) -> Self {
+        Error::Sync
+    }
+}
+
+impl From<GenerateSecretError> for Error{
+    fn from(_: GenerateSecretError) -> Self {
+        Error::KeyExchange
+    }
 }
 
 pub mod aead;

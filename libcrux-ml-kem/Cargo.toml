@@ -32,6 +32,7 @@ hax-lib.workspace = true
 tls_codec = { version = "0.4.2", features = [
     "derive",
 ], default-features = false, optional = true }
+zeroize = {version = "1.8.2"}
 
 [features]
 # By default all variants and std are enabled.

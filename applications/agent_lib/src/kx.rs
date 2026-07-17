@@ -3,8 +3,9 @@ use libcrux_curve25519::{self as curve25519, ecdh_api::EcdhOwned};
 use libcrux_ml_kem::mlkem768;
 use rand::CryptoRng;
 use zerocopy::*;
+use zeroize::ZeroizeOnDrop;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, ZeroizeOnDrop)]
 pub struct SharedKey([u8; 32]);
 
 /// An ML-KEM-768 public key (1184 bytes).
@@ -30,7 +31,7 @@ pub struct X25519PublicKey([u8; 32]);
 
 // TODO: MLKEM PrivateKey
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, ZeroizeOnDrop)]
 #[repr(C)]
 pub struct X25519SecretKey([u8; 32]);
 

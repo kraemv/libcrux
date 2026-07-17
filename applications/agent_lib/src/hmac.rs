@@ -1,6 +1,7 @@
 use crate::{hkdf::RandomBytes, InnerRndBytes};
 use libcrux_hmac;
 use zerocopy::*;
+use zeroize::ZeroizeOnDrop;
 
 pub struct Sha2_256HMAC;
 
@@ -9,7 +10,7 @@ pub struct Sha2_256HMAC;
 #[repr(C)]
 pub struct HmacSha256Mac([u8; 32]);
 
-#[derive(Clone)]
+#[derive(Clone, ZeroizeOnDrop)]
 pub struct HmacSha256Key(InnerRndBytes);
 
 impl HmacSha256Mac {

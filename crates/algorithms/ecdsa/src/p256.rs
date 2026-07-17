@@ -5,6 +5,7 @@ use libcrux_p256::{
     ecdsa_sign_p256_sha512, ecdsa_verif_p256_sha2, ecdsa_verif_p256_sha384,
     ecdsa_verif_p256_sha512, uncompressed_to_raw, validate_private_key, validate_public_key,
 };
+use zeroize::ZeroizeOnDrop;
 
 use super::Error;
 use crate::DigestAlgorithm;
@@ -20,7 +21,7 @@ pub struct Nonce([u8; 32]);
 pub struct PrivateKey([u8; 32]);
 
 /// An ECDSA P-256 public key
-#[derive(Debug)]
+#[derive(Debug, ZeroizeOnDrop)]
 pub struct PublicKey(pub [u8; 64]);
 
 mod conversions {

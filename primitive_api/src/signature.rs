@@ -25,6 +25,7 @@ use libcrux_hmac_drbg::HmacDrbgSha256;
 use rand::rand_core::UnwrapErr;
 use rand::rngs::SysRng;
 use rand::SeedableRng;
+use zeroize::ZeroizeOnDrop;
 
 pub type DefaultSigningKey = Ed25519SigningKey;
 
@@ -59,7 +60,7 @@ impl Sig for EcDsaP256 {}
 /// let msg = b"Test message";
 /// let sig = sk.sign(msg).expect("Signing failed");
 ///
-/// match vk.verify(msg, sig) {
+/// match vk.verify(msg, &sig) {
 ///     Ok(_) => println!("Valid signature"),
 ///     Err(Error::InvalidSignature) => println!("Invalid signature"),
 ///     Err(Error::Verify) => println!("Verification had an internal error"),
@@ -76,7 +77,7 @@ impl Sig for EcDsaP256 {}
 /// let msg = b"Test message";
 /// let sig = sk.sign(msg).expect("Signing failed");
 ///
-/// match vk.verify(msg, sig) {
+/// match vk.verify(msg, &sig) {
 ///     Ok(_) => println!("Valid signature"),
 ///     Err(Error::InvalidSignature) => println!("Invalid signature"),
 ///     Err(Error::Verify) => println!("Verification had an internal error"),
@@ -92,7 +93,7 @@ impl Sig for EcDsaP256 {}
 /// Length requirements for variable length input/output schemes
 ///
 /// In future: Default is PQ
-pub trait SigningKey: Send + Sync + Sized + for<'a> TryFrom<PrivatePkcs8KeyDer<'a>> {
+pub trait SigningKey: Send + Sync + Sized + for<'a> TryFrom<PrivatePkcs8KeyDer<'a>> + ZeroizeOnDrop {
     type PublicKey: VerificationKey + NetworkObject;
     type Signature: NetworkObject;
     const SCHEME: SignatureScheme;
@@ -125,13 +126,14 @@ pub enum SignatureScheme {
 
 const LOCAL_KEY_ID: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.113549.1.9.21");
 
-#[derive(Clone, Debug)]
-pub struct SigningKeyID<Scheme: Sig, Vk: VerificationKey> {
+#[derive(Clone, Debug, ZeroizeOnDrop)]
+pub struct SigningKeyID<Scheme: Sig, Vk: VerificationKey + ZeroizeOnDrop> {
     id: ID,
     public_key: Vk,
     marker: PhantomData<Scheme>,
 }
 
+#[derive(ZeroizeOnDrop)]
 pub struct Ed25519SigningKey {
     sk: libcrux_ed25519::SigningKey,
     vk: Ed25519PublicKey,
@@ -348,7 +350,7 @@ impl VerificationKey for Ed25519PublicKey {
     const SCHEME: SignatureScheme = SignatureScheme::Ed25519;
 
     fn verify(&self, payload: &[u8], signature: &Self::Signature) -> Result<(), Error> {
-        ed25519::verify(payload, &self.into_bytes(), signature.get_signature()).map_err(Error::from)
+        ed25519::verify(payload, self.as_bytes(), signature.get_signature()).map_err(Error::from)
     }
 }
 

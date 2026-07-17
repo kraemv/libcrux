@@ -126,21 +126,15 @@ impl<'a, Scheme, const NONCE_LEN: usize, const TAG_LEN: usize> TryFrom<&'a [u8]>
     type Error = Error;
 
     fn try_from(request: &'a [u8]) -> Result<Self, Self::Error> {
-        let (id, request_slice) =
-            ID::try_read_from_prefix(request)
-                .map_err(|_| Error::MalformedRequest)?;
+        let (id, request_slice) = ID::try_read_from_prefix(request)?;
 
-        let (nonce, request_slice) = 
-            <[u8; NONCE_LEN]>::try_read_from_prefix(request_slice)
-                .map_err(|_| Error::MalformedRequest)?;
+        let (nonce, request_slice) = <[u8; NONCE_LEN]>::try_read_from_prefix(request_slice)?;
 
-        let (plaintext_len, request_slice) =
-            usize::try_read_from_prefix(request_slice)
-                .map_err(|_| Error::MalformedRequest)?;
+        let (plaintext_len, request_slice) = usize::try_read_from_prefix(request_slice)?;
 
         let (plaintext, aad) = request_slice
             .split_at_checked(plaintext_len)
-            .ok_or(Error::MalformedRequest)?;
+            .ok_or(Error::MalformedMessage)?;
 
         Ok(Self {
             plaintext,
@@ -160,7 +154,7 @@ impl<'a, Scheme, const TAG_LEN: usize> TryFrom<&'a [u8]>
     fn try_from(response: &'a [u8]) -> Result<Self, Self::Error> {
         let (tag, ciphertext) = response
             .split_at_checked(TAG_LEN)
-            .ok_or(Error::MalformedRequest)?;
+            .ok_or(Error::MalformedMessage)?;
         let tag: [u8; TAG_LEN] = tag.try_into().expect("No panic here!");
         Ok(Self {
             tag,
@@ -243,21 +237,17 @@ impl<'a, Scheme, const NONCE_LEN: usize, const TAG_LEN: usize> TryFrom<&'a [u8]>
     type Error = Error;
 
     fn try_from(request: &'a [u8]) -> Result<Self, Self::Error> {
-        let (id, request_slice) =
-            ID::try_read_from_prefix(request).map_err(|_| Error::MalformedRequest)?;
+        let (id, request_slice) = ID::try_read_from_prefix(request)?;
 
-        let (nonce, request_slice) = <[u8; NONCE_LEN]>::try_read_from_prefix(request_slice)
-            .map_err(|_| Error::MalformedRequest)?;
+        let (nonce, request_slice) = <[u8; NONCE_LEN]>::try_read_from_prefix(request_slice)?;
 
-        let (tag, request_slice) =
-            <[u8; TAG_LEN]>::try_read_from_prefix(request_slice).map_err(|_| Error::MalformedRequest)?;
+        let (tag, request_slice) = <[u8; TAG_LEN]>::try_read_from_prefix(request_slice)?;
 
-        let (ciphertext_len, request_slice) =
-            usize::try_read_from_prefix(request_slice).map_err(|_| Error::MalformedRequest)?;
+        let (ciphertext_len, request_slice) = usize::try_read_from_prefix(request_slice)?;
 
         let (ciphertext, aad) = request_slice
             .split_at_checked(ciphertext_len)
-            .ok_or(Error::MalformedRequest)?;
+            .ok_or(Error::MalformedMessage)?;
 
         Ok(Self {
             tag,

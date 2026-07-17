@@ -13,6 +13,7 @@ use libcrux_hmac_drbg::HmacDrbgSha256;
 use rand::rand_core::UnwrapErr;
 use rand::rngs::SysRng;
 use rand::{Rng, SeedableRng};
+use zeroize::ZeroizeOnDrop;
 
 /// KEM Errors
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,10 +52,10 @@ impl Kem for MlKem768 {}
 ///
 /// assert_eq!(shk_a, shk_b)
 /// ```
-pub trait DecapsKey: Send + Sync + Sized {
+pub trait DecapsKey: Send + Sync + Sized + ZeroizeOnDrop {
     type PublicKey: EncapsKey + Sized;
     type Ciphertext: NetworkObject;
-    type SharedSecret: HkdfIkm + NetworkObject;
+    type SharedSecret: HkdfIkm + NetworkObject + ZeroizeOnDrop;
     const SCHEME: KemScheme;
 
     // Generate a private-public key pair

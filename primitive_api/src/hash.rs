@@ -23,6 +23,8 @@ pub trait Hash<const N: usize>: Digest<N> + Send + Sync {
     fn init() -> Self;
 
     fn fork(&self) -> Self;
+
+    fn finalize(self) -> [u8; N];
 }
 
 impl Hash<{ libcrux_sha2::SHA256_LENGTH }> for libcrux_sha2::Sha256 {
@@ -34,5 +36,11 @@ impl Hash<{ libcrux_sha2::SHA256_LENGTH }> for libcrux_sha2::Sha256 {
 
     fn fork(&self) -> Self {
         self.clone()
+    }
+
+    fn finalize(self) -> [u8; libcrux_sha2::SHA256_LENGTH] {
+        let mut digest = [0u8; libcrux_sha2::SHA256_LENGTH];
+        self.finish(&mut digest);
+        digest
     }
 }

@@ -22,13 +22,11 @@ pub(crate) fn handle_request(request: &IPCSetupRequest) -> Result<IPCSetupRespon
     match request.get_header().get_type() {
         SetupMessageKind::AgentInit => Ok(IPCSetupResponse::from(&InitResult::from(init_agent()))),
         SetupMessageKind::EcDsaP256Key => {
-            let key = SetupRequest::<EcDsaP256SHA256>::try_ref_from_bytes(request.get_payload())
-                .map_err(|_| Error::MalformedRequest)?;
+            let key = SetupRequest::<EcDsaP256SHA256>::try_ref_from_bytes(request.get_payload())?;
             import_ecdsa_p256_key(key.get_private_key()?).map(|res| IPCSetupResponse::from(&res))
         }
         SetupMessageKind::Ed25519Key => {
-            let key = SetupRequest::<Ed25519>::try_ref_from_bytes(request.get_payload())
-                .map_err(|_| Error::MalformedRequest)?;
+            let key = SetupRequest::<Ed25519>::try_ref_from_bytes(request.get_payload())?;
             import_ed25519_key(key.get_private_key()).map(|res| IPCSetupResponse::from(&res))
         }
         SetupMessageKind::Error => Err(Error::IO),

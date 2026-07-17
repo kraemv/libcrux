@@ -18,6 +18,7 @@ libcrux-sha2 = { workspace = true, features = [
 libcrux-macros = { version = "=0.0.3", path = "../../utils/macros" }
 rand_core = { version = "0.10", optional = true }
 tls_codec = { version = "0.4.2", features = ["derive"], optional = true }
+zeroize = {version = "1.8.2"}
 
 [dev-dependencies]
 hex = "0.4.3"

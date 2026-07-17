@@ -3,12 +3,13 @@ use std::marker::PhantomData;
 use crate::Error;
 use heapless::Vec;
 use zerocopy::*;
+use zeroize::ZeroizeOnDrop;
 
 pub(crate) const ID_SIZE: usize = 31;
 pub(crate) type InnerRndBytes = Vec<u8, 64>;
 
 #[derive(
-    Clone, Debug, Hash, PartialEq, Eq, FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned,
+    Clone, Debug, Hash, PartialEq, Eq, FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned, ZeroizeOnDrop
 )]
 #[repr(C)]
 pub struct ID([u8; ID_SIZE]);
@@ -16,7 +17,7 @@ pub struct ID([u8; ID_SIZE]);
 impl TryFrom<&[u8]> for ID {
     type Error = Error;
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        let id: [u8; ID_SIZE] = value.try_into().map_err(|_| Error::MalformedRequest)?;
+        let id: [u8; ID_SIZE] = value.try_into().map_err(|_| Error::MalformedMessage)?;
         Ok(Self(id))
     }
 }
@@ -44,7 +45,7 @@ pub enum ConversionError {
     NoIndex,
 }
 
-#[derive(Debug, IntoBytes, FromBytes, Immutable, KnownLayout)]
+#[derive(Debug, IntoBytes, FromBytes, Immutable, KnownLayout, ZeroizeOnDrop)]
 #[repr(C)]
 pub struct KeyID<Scheme> {
     id: ID,
@@ -84,7 +85,7 @@ impl<Scheme> From<[u8; ID_SIZE]> for KeyID<Scheme> {
 
 impl<Scheme> From<KeyID<Scheme>> for [u8; ID_SIZE] {
     fn from(value: KeyID<Scheme>) -> Self {
-        value.id.into()
+        *value.id.as_ref()
     }
 }
 

@@ -45,30 +45,26 @@ pub(crate) fn handle_request(request: & IPCRequest) -> Result<IPCResponse, Error
         MessageKind::Error => Err(Error::IO),
 
         MessageKind::MlKem768Decaps => {
-            let request = MlKem768DecapsRequest::try_ref_from_bytes(request.get_payload())
-                .map_err(|_| Error::MalformedRequest)?;
+            let request = MlKem768DecapsRequest::try_ref_from_bytes(request.get_payload())?;
             handle_mlkem768_decaps(request)
         }
 
         MessageKind::MlKem768Encaps => {
-            let request = MlKem768EncapsRequest::try_ref_from_bytes(request.get_payload())
-                .map_err(|_| Error::MalformedRequest)?;
+            let request = MlKem768EncapsRequest::try_ref_from_bytes(request.get_payload())?;
             handle_mlkem768_encaps(request)
         }
 
         MessageKind::MlKem768KeyGen => handle_mlkem768_key_gen(),
 
         MessageKind::X25519Derive => {
-            let request = X25519DeriveRequest::try_ref_from_bytes(request.get_payload())
-                .map_err(|_| Error::MalformedRequest)?;
+            let request = X25519DeriveRequest::try_ref_from_bytes(request.get_payload())?;
             handle_x25519_derive(request)
         }
 
         MessageKind::X25519KeyGen => handle_x25519_key_gen(),
 
         MessageKind::Export => {
-            let request = ExportNonceRequest::try_ref_from_bytes(request.get_payload())
-                .map_err(|_| Error::MalformedRequest)?;
+            let request = ExportNonceRequest::try_ref_from_bytes(request.get_payload())?;
             let response = ExportNonceResponse::new(export_nonce(request.get_id())?);
             Ok(IPCResponse::from(response))
         }
@@ -79,8 +75,7 @@ pub(crate) fn handle_request(request: & IPCRequest) -> Result<IPCResponse, Error
         }
 
         MessageKind::HkdfExtractSecret => {
-            let request = HkdfExtractSecretRequest::try_from(request.get_payload())
-                .map_err(|_| Error::MalformedRequest)?;
+            let request = HkdfExtractSecretRequest::try_from(request.get_payload())?;
             handle_hkdf_extract_secret_salt(&request)
         }
 

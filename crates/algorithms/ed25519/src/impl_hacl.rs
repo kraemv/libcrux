@@ -1,5 +1,6 @@
 #[cfg(feature = "codec")]
 use tls_codec::{TlsDeserialize, TlsSerialize, TlsSize};
+use zeroize::ZeroizeOnDrop;
 
 #[cfg(feature = "codec")]
 extern crate std;
@@ -15,7 +16,7 @@ pub enum Error {
 }
 
 /// An Ed25519 public, verification key
-#[derive(Default, Clone, Copy, Debug)]
+#[derive(Default, Clone, Debug, ZeroizeOnDrop)]
 #[cfg_attr(feature = "codec", derive(TlsSerialize, TlsDeserialize, TlsSize))]
 pub struct VerificationKey {
     value: [u8; 32],
@@ -40,7 +41,7 @@ impl AsRef<[u8; 32]> for VerificationKey {
 }
 
 /// An Ed25519 private, signing  key
-#[derive(Default)]
+#[derive(Default, ZeroizeOnDrop)]
 pub struct SigningKey {
     value: [u8; 32],
 }

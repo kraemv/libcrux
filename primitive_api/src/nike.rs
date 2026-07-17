@@ -12,6 +12,7 @@ use libcrux_hmac_drbg::HmacDrbgSha256;
 use rand::rand_core::UnwrapErr;
 use rand::rngs::SysRng;
 use rand::{Rng, SeedableRng};
+use zeroize::ZeroizeOnDrop;
 
 /// NIKE Errors
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,9 +45,9 @@ impl Nike for X25519 {}
 ///
 /// assert_eq!(shk_a, shk_b)
 /// ```
-pub trait NIKESecretKey: Send + Sync + Sized {
+pub trait NIKESecretKey: Send + Sync + Sized + ZeroizeOnDrop{
     type PublicKey: Debug + NetworkObject;
-    type SharedSecret: HkdfIkm + NetworkObject;
+    type SharedSecret: HkdfIkm + NetworkObject + ZeroizeOnDrop;
     const SCHEME: NIKEScheme;
 
     // Generate a private-public key pair

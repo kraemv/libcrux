@@ -63,7 +63,7 @@ impl<'a> TryFrom<&'a [u8]> for HkdfExtractPublicRequest<'a> {
     type Error = Error;
 
     fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
-        let (id, salt) = ID::try_read_from_prefix(bytes).map_err(|_| Error::MalformedRequest)?;
+        let (id, salt) = ID::try_read_from_prefix(bytes)?;
 
         Ok(Self { id, salt })
     }
@@ -77,13 +77,13 @@ impl<'a> TryFrom<&'a [u8]> for HkdfExtractSecretRequest {
     fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
         let (salt, key) = match bytes.len() {
             ID_SIZE => (
-                ID::try_read_from_bytes(bytes).map_err(|_| Error::MalformedRequest)?,
+                ID::try_read_from_bytes(bytes)?,
                 None,
             ),
             _ => {
                 let (salt, bytes) =
-                    ID::try_read_from_prefix(bytes).map_err(|_| Error::MalformedRequest)?;
-                let key = ID::try_read_from_bytes(bytes).map_err(|_| Error::MalformedRequest)?;
+                    ID::try_read_from_prefix(bytes)?;
+                let key = ID::try_read_from_bytes(bytes)?;
                 (salt, Some(key))
             }
         };
@@ -118,9 +118,9 @@ impl<'a> TryFrom<&'a [u8]> for HkdfExpandRequest<'a> {
     type Error = Error;
 
     fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
-        let (id, bytes) = ID::try_read_from_prefix(bytes).map_err(|_| Error::MalformedRequest)?;
+        let (id, bytes) = ID::try_read_from_prefix(bytes)?;
         let (output_len, info) =
-            usize::try_read_from_prefix(bytes).map_err(|_| Error::MalformedRequest)?;
+            usize::try_read_from_prefix(bytes)?;
 
         Ok(Self {
             id,

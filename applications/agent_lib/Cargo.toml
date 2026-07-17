@@ -20,6 +20,7 @@ libcrux-hkdf.workspace = true
 libcrux-hmac.workspace = true
 libcrux-kmac.workspace = true
 libcrux-sha2.workspace = true
+libcrux-traits.workspace = true
 
 base64ct = "1.8.3"
 hex = "0.4"
@@ -28,3 +29,4 @@ ipc-channel = "0.21.0"
 rand = { version = "0.10" }
 zerocopy = {version="0.8.47", features = ["derive", "std"]}
 libc = "0.2.183"
+zeroize = { version = "1.8.2"}

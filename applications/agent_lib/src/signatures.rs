@@ -5,6 +5,7 @@ use libcrux_ecdsa as ecdsa;
 use libcrux_ed25519 as ed25519;
 use libcrux_sha2::Algorithm as DigestAlgorithm;
 use rand::CryptoRng;
+use zeroize::ZeroizeOnDrop;
 
 pub struct EcDsaP256SHA256 {}
 pub struct Ed25519 {}
@@ -18,7 +19,7 @@ pub struct EcDsaP256Signature<DigestAlg> {
     _marker: PhantomData<DigestAlg>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, ZeroizeOnDrop)]
 pub struct EcDsaP256PublicKey<DigestAlg> {
     key: ecdsa::p256::PublicKey,
     _marker: PhantomData<DigestAlg>,
@@ -29,9 +30,10 @@ pub struct EcDsaP256PrivateKey<DigestAlg> {
     _marker: PhantomData<DigestAlg>,
 }
 
+#[derive(ZeroizeOnDrop)]
 pub struct Ed25519PrivateKey(ed25519::SigningKey);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, ZeroizeOnDrop)]
 pub struct Ed25519PublicKey(ed25519::VerificationKey);
 
 pub struct Ed25519Signature(ed25519::Signature);
@@ -164,10 +166,6 @@ impl Ed25519PrivateKey {
 impl Ed25519PublicKey {
     pub fn new(key: ed25519::VerificationKey) -> Self {
         Self(key)
-    }
-
-    pub fn into_bytes(&self) -> [u8; 32] {
-        self.0.into_bytes()
     }
 
     pub fn as_bytes(&self) -> &[u8; 32] {

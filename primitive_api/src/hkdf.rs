@@ -4,6 +4,7 @@ use libcrux_agent::hkdf::HkdfSha256PRK;
 use libcrux_agent::kx::SharedKey;
 use libcrux_hkdf;
 use libcrux_sha2::{Sha256, SHA256_LENGTH};
+use zeroize::ZeroizeOnDrop;
 
 use crate::hash::Hash;
 use crate::provider::get_agent;
@@ -20,7 +21,7 @@ pub enum Error {
 pub type DefaultHKDF = Hkdf<SHA256_LENGTH, Sha256, Lib>;
 
 pub trait SaltValue {}
-pub trait HkdfIkm {}
+pub trait HkdfIkm: ZeroizeOnDrop{}
 
 impl SaltValue for KeyID<RandomKey> {}
 impl SaltValue for RandomKey {}
@@ -30,9 +31,6 @@ impl HkdfIkm for SharedKey {}
 
 /// Minimal example:
 /// ```
-/// use rand::{RngCore, SeedableRng};
-/// use rand_chacha::ChaChaRng;
-///
 /// use libcrux_primitive_api::hkdf::*;
 /// use libcrux_primitive_api::nike::*;
 ///
@@ -71,7 +69,7 @@ pub trait SaltedRandomnessExtractor {
     fn extract_with_key(self, key: Self::Key) -> Result<Self::Prk, Error>;
 }
 
-pub trait HKDFKey: Send + Sync {
+pub trait HKDFKey: Send + Sync + ZeroizeOnDrop {
     const N: usize;
     type Okm: NetworkObject;
 

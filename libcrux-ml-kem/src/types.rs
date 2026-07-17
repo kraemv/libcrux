@@ -1,6 +1,8 @@
+use zeroize::ZeroizeOnDrop;
+
 macro_rules! impl_generic_struct {
     ($name:ident, $doc:expr) => {
-        #[derive(Clone)]
+        #[derive(Clone, ZeroizeOnDrop)]
         #[doc = $doc]
         pub struct $name<const SIZE: usize> {
             pub(crate) value: [u8; SIZE],

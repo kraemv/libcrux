@@ -30,7 +30,7 @@ pub struct Agent {
 impl Agent {
     pub fn connect_agent(agent_path: String) -> Result<Self, Error> {
         unsafe {
-            libc::umask(0o117);
+            libc::umask(0o007);
         }
 
         std::env::set_var("TMPDIR", "/tmp/ipcdir");
@@ -74,10 +74,9 @@ impl Agent {
 
     fn expect_kind(response: &IPCResponse, expected: MessageKind) -> Result<&[u8], Error> {
         match response.get_header().get_type() {
-            MessageKind::Error => Err(Error::try_read_from_bytes(response.get_payload())
-                .map_err(|_| Error::MalformedResponse)?),
+            MessageKind::Error => Err(Error::try_read_from_bytes(response.get_payload())?),
             kind if kind == expected => Ok(response.get_payload()),
-            _ => Err(Error::MalformedResponse),
+            _ => Err(Error::MalformedMessage),
         }
     }
 
@@ -99,7 +98,7 @@ impl Agent {
                     _ => Err(Error::IO),
                 }
             }
-            _ => Err(Error::MalformedResponse),
+            _ => Err(Error::MalformedMessage),
         }
     }
 
@@ -117,11 +116,10 @@ impl Agent {
         match response.get_header().get_type() {
             SetupMessageKind::EcDsaP256Key => {
                 let r =
-                    SetupResponse::<EcDsaP256PublicKey<SHA256>>::try_from(response.get_payload())
-                        .map_err(|_| Error::MalformedResponse)?;
+                    SetupResponse::<EcDsaP256PublicKey<SHA256>>::try_from(response.get_payload())?;
                 Ok((r.get_id().clone(), EcDsaP256PublicKey::<SHA256>::from(r)))
             }
-            _ => Err(Error::MalformedResponse),
+            _ => Err(Error::MalformedMessage),
         }
     }
 
@@ -135,11 +133,10 @@ impl Agent {
 
         match response.get_header().get_type() {
             SetupMessageKind::Ed25519Key => {
-                let r = SetupResponse::<Ed25519PublicKey>::try_from(response.get_payload())
-                    .map_err(|_| Error::MalformedResponse)?;
+                let r = SetupResponse::<Ed25519PublicKey>::try_from(response.get_payload())?;
                 Ok((r.get_id().clone(), Ed25519PublicKey::from(r)))
             }
-            _ => Err(Error::MalformedResponse),
+            _ => Err(Error::MalformedMessage),
         }
     }
 
@@ -198,8 +195,7 @@ impl Agent {
         let response = self.send_recv(request)?;
 
         let payload = Self::expect_kind(&response, MessageKind::ChaCha20Poly1305Encrypt)?;
-        let (ct, tag) = AeadEncryptResponse::<ChaCha20Poly1305, CHACHA_TAG_LEN>::try_from(payload)
-            .map_err(|_| Error::MalformedResponse)?
+        let (ct, tag) = AeadEncryptResponse::<ChaCha20Poly1305, CHACHA_TAG_LEN>::try_from(payload)?
             .into_parts();
         ciphertext.copy_from_slice(ct);
         Ok((ciphertext, tag.into()))
@@ -217,7 +213,7 @@ impl Agent {
             id, message,
         )))?;
         let payload = Self::expect_kind(&response, MessageKind::EcDsaP256Sign)?;
-        let r = SignResponse::try_ref_from_bytes(payload).map_err(|_| Error::MalformedResponse)?;
+        let r = SignResponse::try_ref_from_bytes(payload)?;
         Ok(EcDsaP256Signature::from(r))
     }
 
@@ -225,7 +221,7 @@ impl Agent {
         let response =
             self.send_recv(IPCRequest::from(SignRequest::<Ed25519>::new(id, message)))?;
         let payload = Self::expect_kind(&response, MessageKind::Ed25519Sign)?;
-        let r = SignResponse::try_ref_from_bytes(payload).map_err(|_| Error::MalformedResponse)?;
+        let r = SignResponse::try_ref_from_bytes(payload)?;
         Ok(Ed25519Signature::from(r))
     }
 
@@ -236,16 +232,14 @@ impl Agent {
     pub fn x25519_generate_key_id(&self) -> Result<(ID, X25519PublicKey), Error> {
         let response = self.send_recv(IPCRequest::x25519_keygen())?;
         let payload = Self::expect_kind(&response, MessageKind::X25519KeyGen)?;
-        let r = X25519KeyGenResponse::try_ref_from_bytes(payload)
-            .map_err(|_| Error::MalformedResponse)?;
+        let r = X25519KeyGenResponse::try_ref_from_bytes(payload)?;
         Ok((r.get_id().clone(), X25519PublicKey::from(r)))
     }
 
     pub fn x25519_derive_for_key_id(&self, id: ID, pk: X25519PublicKey) -> Result<ID, Error> {
         let response = self.send_recv(IPCRequest::from(X25519DeriveRequest::new(id, pk)))?;
         let payload = Self::expect_kind(&response, MessageKind::X25519Derive)?;
-        let r = X25519DeriveResponse::try_ref_from_bytes(payload)
-            .map_err(|_| Error::MalformedResponse)?;
+        let r = X25519DeriveResponse::try_ref_from_bytes(payload)?;
         Ok(r.get_id().clone())
     }
 
@@ -256,8 +250,7 @@ impl Agent {
     pub fn mlkem_768_generate_key_id(&self) -> Result<(ID, LibcruxMlKem768PublicKey), Error> {
         let response = self.send_recv(IPCRequest::mlkem768_keygen())?;
         let payload = Self::expect_kind(&response, MessageKind::MlKem768KeyGen)?;
-        let r = MlKem768KeyGenResponse::try_ref_from_bytes(payload)
-            .map_err(|_| Error::MalformedResponse)?;
+        let r = MlKem768KeyGenResponse::try_ref_from_bytes(payload)?;
         Ok((r.get_id().clone(), LibcruxMlKem768PublicKey::from(r)))
     }
 
@@ -269,8 +262,7 @@ impl Agent {
         let ct = MlKem768Ciphertext::new(*ct.as_slice());
         let response = self.send_recv(IPCRequest::from(MlKem768DecapsRequest::new(id, ct)))?;
         let payload = Self::expect_kind(&response, MessageKind::MlKem768Decaps)?;
-        let r = MlKem768DecapsResponse::try_ref_from_bytes(payload)
-            .map_err(|_| Error::MalformedResponse)?;
+        let r = MlKem768DecapsResponse::try_ref_from_bytes(payload)?;
         Ok(r.get_id().clone())
     }
 
@@ -281,8 +273,7 @@ impl Agent {
         let pk = MlKem768PublicKey::new(*pk.as_slice());
         let response = self.send_recv(IPCRequest::from(MlKem768EncapsRequest::new(pk)))?;
         let payload = Self::expect_kind(&response, MessageKind::MlKem768Encaps)?;
-        let r = MlKem768EncapsResponse::try_ref_from_bytes(payload)
-            .map_err(|_| Error::MalformedResponse)?;
+        let r = MlKem768EncapsResponse::try_ref_from_bytes(payload)?;
         Ok((
             r.get_id().clone(),
             LibcruxMlKem768Ciphertext::from(r.get_ct().as_bytes()),
@@ -292,16 +283,14 @@ impl Agent {
     pub fn hkdf_extract_public_salt(&self, id: ID, salt: &[u8]) -> Result<ID, Error> {
         let response = self.send_recv(IPCRequest::from(HkdfExtractPublicRequest::new(id, salt)))?;
         let payload = Self::expect_kind(&response, MessageKind::HkdfExtractPublic)?;
-        let r = HkdfResponse::<HkdfExtractPublicSalt>::try_ref_from_bytes(payload)
-            .map_err(|_| Error::MalformedResponse)?;
+        let r = HkdfResponse::<HkdfExtractPublicSalt>::try_ref_from_bytes(payload)?;
         Ok(r.get_id().clone())
     }
 
     pub fn hkdf_extract_secret_salt(&self, id: Option<ID>, salt: ID) -> Result<ID, Error> {
         let response = self.send_recv(IPCRequest::from(HkdfExtractSecretRequest::new(id, salt)))?;
         let payload = Self::expect_kind(&response, MessageKind::HkdfExtractSecret)?;
-        let r = HkdfResponse::<HkdfExtractSecretSalt>::try_ref_from_bytes(payload)
-            .map_err(|_| Error::MalformedResponse)?;
+        let r = HkdfResponse::<HkdfExtractSecretSalt>::try_ref_from_bytes(payload)?;
         Ok(r.get_id().clone())
     }
 
@@ -310,8 +299,7 @@ impl Agent {
             id, output_len, info,
         )))?;
         let payload = Self::expect_kind(&response, MessageKind::HkdfExpand)?;
-        let r = HkdfResponse::<HkdfExpand>::try_ref_from_bytes(payload)
-            .map_err(|_| Error::MalformedResponse)?;
+        let r = HkdfResponse::<HkdfExpand>::try_ref_from_bytes(payload)?;
         Ok(r.get_id().clone())
     }
 
@@ -324,8 +312,7 @@ impl Agent {
             id, message,
         )))?;
         let payload = Self::expect_kind(&response, MessageKind::HmacSha2_256Authenticate)?;
-        let r = HmacResponse::<HmacSha256Mac>::try_ref_from_bytes(payload)
-            .map_err(|_| Error::MalformedResponse)?;
+        let r = HmacResponse::<HmacSha256Mac>::try_ref_from_bytes(payload)?;
         Ok(HmacSha256Mac::from(r))
     }
 

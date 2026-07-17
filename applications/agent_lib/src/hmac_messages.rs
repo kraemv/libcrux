@@ -44,7 +44,7 @@ impl<'a, Scheme> TryFrom<&'a [u8]> for HmacRequest<'a, Scheme> {
     fn try_from(request: &'a [u8]) -> Result<Self, Self::Error> {
         let (id, message) = request
             .split_at_checked(crate::ID_SIZE)
-            .ok_or(Error::MalformedRequest)?;
+            .ok_or(Error::MalformedMessage)?;
         let id: ID = id.try_into().expect("No panic here!");
         Ok(Self {
             id,

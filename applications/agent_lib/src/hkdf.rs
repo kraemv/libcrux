@@ -2,11 +2,12 @@ use crate::kx::SharedKey;
 use crate::Error;
 use crate::InnerRndBytes;
 use libcrux_hkdf as hkdf;
+use zeroize::ZeroizeOnDrop;
 use std::vec::Vec as std_vec;
 
 pub(crate) const SHA2_256_LEN: usize = hkdf::Algorithm::hash_len(hkdf::Algorithm::Sha256);
 
-#[derive(Clone)]
+#[derive(Clone, ZeroizeOnDrop)]
 pub struct HkdfSha256PRK([u8; 32]);
 #[derive(Clone)]
 pub struct RandomBytes(InnerRndBytes);
