@@ -10,7 +10,6 @@ readme.workspace = true
 
 [dependencies]
 
-base64ct = "1.8.3"
 hex = "0.4"
 ipc-channel = "0.21.0"
 rand = { version = "0.10" }

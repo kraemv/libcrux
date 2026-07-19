@@ -6,7 +6,6 @@ use crate::signatures::*;
 use crate::ID_SIZE;
 use crate::{Error, ID};
 
-use base64ct::{Base64, Encoding};
 use hex;
 use libcrux_chacha20poly1305 as chacha20;
 use libcrux_curve25519 as curve25519;
@@ -18,12 +17,10 @@ use libcrux_ml_kem::mlkem768::{self, MlKem768PrivateKey};
 use rand::CryptoRng;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::fmt::Write as fmtWrite;
 use std::format;
 use std::fs;
 use std::mem;
 use std::path::Path;
-use std::string::String;
 use std::sync::{Arc, RwLock};
 
 const ECDSA_P256_LABEL: &[u8; 12] = b"EcDsaP256Key";
@@ -377,10 +374,11 @@ impl KeyStore<LongTermKey> {
 
         let file_contents = fs::read(root_file).expect("Cannot read agent file");
         let mut lines = file_contents.split(|c| *c == b'\n');
-        let mut root_key: [u8; 32] = [0u8; 32];
-        lines
+        let root_key = *lines
             .next()
-            .map(|key| Base64::decode(key, &mut root_key).unwrap())
+            .map(|key| hex::decode(key).unwrap())
+            .ok_or(Error::Encoding)?
+            .as_array()
             .ok_or(Error::Encoding)?;
 
         let store = Self {
@@ -391,21 +389,19 @@ impl KeyStore<LongTermKey> {
         for line in lines {
             let mut parts = line.split(|c| *c == b' ');
             let scheme = parts.next().ok_or(Error::Encoding)?;
-            let mut id = [0u8; ID_SIZE];
-            parts
+            let id: [u8; 31] = *parts
                 .next()
-                .map(|enc_id: &[u8]| Base64::decode(enc_id, &mut id).unwrap())
+                .map(|enc_id: &[u8]| hex::decode(enc_id).unwrap())
+                .ok_or(Error::Encoding)?
+                .as_array()
                 .ok_or(Error::Encoding)?;
 
             if parts.next().is_some() {
                 continue;
             }
 
-            let hex_id = hex::encode(id);
-
-            let mut key_path = String::with_capacity(3);
-            write!(&mut key_path, "{:02x}/", id[0]).unwrap();
-            let key_file = agent_path.join(key_path).join(hex_id);
+            let enc_id = hex::encode(id.as_ref());
+            let key_file = agent_path.join(&enc_id[..2]).join(enc_id);
 
             let key_bytes = fs::read(key_file);
             if key_bytes.is_err() {

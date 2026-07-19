@@ -119,7 +119,10 @@ impl Agent {
                     SetupResponse::<EcDsaP256PublicKey<SHA256>>::try_from(response.get_payload())?;
                 Ok((r.get_id().clone(), EcDsaP256PublicKey::<SHA256>::from(r)))
             }
-            _ => Err(Error::MalformedMessage),
+            SetupMessageKind::Error => {
+                Err(Error::try_read_from_bytes(response.get_payload())?)
+            },
+            _ => Err(Error::MalformedMessage)
         }
     }
 

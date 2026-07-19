@@ -1,4 +1,3 @@
-use base64ct::{Base64, Encoding};
 use libcrux_agent::ID;
 use rand::rngs::SysRng;
 use rand::TryRng;
@@ -51,24 +50,20 @@ fn init_agent() -> Result<(), Error> {
 
     // Draw a random root key and encode it in b64 for the root file
     let mut root_key = [0u8; 32];
-    let mut b64_encoded_key = [0u8; 44];
     SysRng
         .try_fill_bytes(&mut root_key)
         .map_err(|_| Error::IO)?;
-    Base64::encode(&root_key, &mut b64_encoded_key).map_err(|_| Error::Encoding)?;
+    let root_key = hex::encode(root_key);
 
     // Write the key to the root file
-    fs::write(root_file, b64_encoded_key).map_err(|_| Error::IO)?;
+    fs::write(root_file, root_key.as_bytes()).map_err(|_| Error::IO)?;
     Ok(())
 }
 
 fn register_key(id: &ID, key_bytes: &[u8], key_label: &[u8]) -> Result<(), Error> {
-    let (root_file, key_path, key_file, _) = agent_paths(id);
+    let (root_file, key_path, key_file, enc_id) = agent_paths(id);
 
-    let mut enc_id = [0u8; 44];
-    Base64::encode(id.as_ref(), &mut enc_id).map_err(|_| Error::Encoding)?;
-
-    let entry = [b"\n", key_label, b" ", enc_id.as_slice()].concat();
+    let entry = [b"\n", key_label, b" ", enc_id.as_bytes()].concat();
 
     fs::create_dir_all(&key_path).map_err(|_| Error::IO)?;
     fs::write(key_file, key_bytes).map_err(|_| Error::IO)?;

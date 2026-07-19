@@ -22,7 +22,6 @@ libcrux-kmac.workspace = true
 libcrux-sha2.workspace = true
 libcrux-traits.workspace = true
 
-base64ct = "1.8.3"
 hex = "0.4"
 heapless = "0.9.2"
 ipc-channel = "0.21.0"
