@@ -144,7 +144,6 @@ impl From<&SignResponse<Ed25519>> for Ed25519Signature {
 #[repr(u8)]
 pub enum InitResult {
     Success,
-    Failure,
 }
 
 #[derive(IntoBytes, TryFromBytes, Immutable, KnownLayout, Unaligned)]
@@ -258,15 +257,6 @@ impl From<&Ed25519PrivateKey> for SetupRequest<Ed25519> {
         Self {
             sk: *key.as_bytes(),
             _marker: PhantomData,
-        }
-    }
-}
-
-impl From<Result<(), Error>> for InitResult {
-    fn from(res: Result<(), Error>) -> Self {
-        match res {
-            Ok(()) => InitResult::Success,
-            Err(_) => InitResult::Failure,
         }
     }
 }

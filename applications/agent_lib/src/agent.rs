@@ -139,6 +139,9 @@ impl Agent {
                 let r = SetupResponse::<Ed25519PublicKey>::try_from(response.get_payload())?;
                 Ok((r.get_id().clone(), Ed25519PublicKey::from(r)))
             }
+            SetupMessageKind::Error => {
+                Err(Error::try_read_from_bytes(response.get_payload())?)
+            },
             _ => Err(Error::MalformedMessage),
         }
     }

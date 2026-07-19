@@ -19,7 +19,7 @@ static KEY_STORE: LazyLock<LongTermKeyStore> =
 
 pub(crate) fn handle_request(request: &IPCSetupRequest) -> Result<IPCSetupResponse, Error> {
     match request.get_header().get_type() {
-        SetupMessageKind::AgentInit => Ok(IPCSetupResponse::from(&InitResult::from(init_agent()))),
+        SetupMessageKind::AgentInit => init_agent().map(|res| IPCSetupResponse::from(&res)),
         SetupMessageKind::EcDsaP256Key => {
             let key = SetupRequest::<EcDsaP256SHA256>::try_ref_from_bytes(request.get_payload())?;
             import_ecdsa_p256_key(key.get_private_key()?).map(|res| IPCSetupResponse::from(&res))
@@ -42,7 +42,7 @@ fn agent_paths(id: &ID) -> (PathBuf, PathBuf, PathBuf, String) {
     (root_file, key_path, key_file, hex_id)
 }
 
-fn init_agent() -> Result<(), Error> {
+fn init_agent() -> Result<InitResult, Error> {
     // Build directory and root file paths and create directory
     let agent_path = PathBuf::from(format!("{}/agent", env!("HOME")));
     let root_file = agent_path.join("root_file");
@@ -57,7 +57,7 @@ fn init_agent() -> Result<(), Error> {
 
     // Write the key to the root file
     fs::write(root_file, root_key.as_bytes()).map_err(|_| Error::IO)?;
-    Ok(())
+    Ok(InitResult::Success)
 }
 
 fn register_key(id: &ID, key_bytes: &[u8], key_label: &[u8]) -> Result<(), Error> {
