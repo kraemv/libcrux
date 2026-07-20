@@ -19,11 +19,6 @@ use zeroize::ZeroizeOnDrop;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     Internal(String),
-    Decaps,
-    Encaps,
-    KeyGen,
-    InvalidKey,
-    InputTooLarge,
     Rejected,
 }
 
@@ -46,16 +41,16 @@ impl Kem for MlKem768 {}
 /// let shk_b = match sk_a.decaps(ct) {
 ///     Ok(shk_b) => shk_b,
 ///     Err(Error::Rejected) => return println!("Rejected ciphertext"),
-///     Err(Error::Decaps) => return println!("Decapsulation had an internal error"),
+///     Err(Error::Internal(s)) => return println!("{}", s),
 ///     _ => return println!("Unexpected Error"),
 /// };
 ///
 /// assert_eq!(shk_a, shk_b)
 /// ```
 pub trait DecapsKey: Send + Sync + Sized + ZeroizeOnDrop {
-    type PublicKey: EncapsKey + Sized;
+    type PublicKey: EncapsKey;
     type Ciphertext: NetworkObject;
-    type SharedSecret: HkdfIkm + NetworkObject + ZeroizeOnDrop;
+    type SharedSecret: HkdfIkm + NetworkObject;
     const SCHEME: KemScheme;
 
     // Generate a private-public key pair
@@ -65,7 +60,7 @@ pub trait DecapsKey: Send + Sync + Sized + ZeroizeOnDrop {
     fn decaps(self, ct: Self::Ciphertext) -> Result<Self::SharedSecret, Error>;
 }
 
-pub trait EncapsKey: Send + Sync + AsRef<[u8]> + for<'a> TryFrom<&'a [u8]> {
+pub trait EncapsKey: NetworkObject + Sized {
     type Ciphertext: NetworkObject;
     type SharedSecret: HkdfIkm + NetworkObject;
     const SCHEME: KemScheme;
@@ -105,7 +100,7 @@ impl DecapsKey for KeyID<MlKem768> {
             .ok_or_else(|| Error::Internal("No agent available".into()))?
             .mlkem_768_generate_key_id()
             .map(|(id, pk)| (Self::new(id), MlKem768PublicKey::new(pk)))
-            .map_err(|_| Error::KeyGen)
+            .map_err(|err| Error::Internal(err.to_string()))
     }
 
     fn decaps(self, ct: MlKem768Ciphertext) -> Result<KeyID<SharedKey>, Error> {
@@ -113,7 +108,7 @@ impl DecapsKey for KeyID<MlKem768> {
             .ok_or_else(|| Error::Internal("No agent available".into()))?
             .mlkem_768_decaps_for_id(self.get_id().clone(), MlKem768Ciphertext::from(ct))
             .map(KeyID::<SharedKey>::new)
-            .map_err(|_| Error::Decaps)
+            .map_err(|e| Error::Internal(e.to_string()))
     }
 }
 
@@ -127,7 +122,7 @@ impl EncapsKey for MlKem768PublicKey<AgentLib> {
             .ok_or_else(|| Error::Internal("No agent available".into()))?
             .mlkem_768_encaps_for_id(&self.inner)
             .map(|(id, ct)| (KeyID::<SharedKey>::new(id), ct))
-            .map_err(|_| Error::Encaps)
+            .map_err(|err| Error::Internal(err.to_string()))
     }
 }
 
@@ -171,6 +166,7 @@ impl EncapsKey for MlKem768PublicKey<Lib> {
 }
 
 impl NetworkObject for MlKem768Ciphertext {}
+impl<Impl: Implementation + Send + Sync> NetworkObject for MlKem768PublicKey<Impl> {}
 
 impl<Impl: Implementation> AsRef<[u8]> for MlKem768PublicKey<Impl> {
     fn as_ref(&self) -> &[u8] {
@@ -184,6 +180,6 @@ impl<Impl: Implementation> TryFrom<&[u8]> for MlKem768PublicKey<Impl> {
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         mlkem768::MlKem768PublicKey::try_from(value)
             .map(|pk| Self::new(pk))
-            .map_err(|_| Error::InvalidKey)
+            .map_err(|_| Error::Internal("Invalid public key".into()))
     }
 }

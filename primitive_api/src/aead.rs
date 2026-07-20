@@ -52,12 +52,13 @@ pub type DefaultAEADKey = ChaCha20Poly1305Key;
 ///
 /// assert_eq!(msg, pt)
 /// ```
-pub trait AEADKey<const KEY_SIZE: usize>: Send + Sync + From<[u8; KEY_SIZE]> + ZeroizeOnDrop{
+pub trait AEADKey: Send + Sync + for<'a> TryFrom<&'a [u8]> + ZeroizeOnDrop{
     type Tag: NetworkObject;
     type Nonce: NetworkObject;
 
     const SCHEME: AEADAlgorithm;
     const KEY_LEN: usize;
+    const KEY_SIZE: usize;
 
     fn encrypt<'a>(
         &self,
@@ -77,12 +78,13 @@ pub trait AEADKey<const KEY_SIZE: usize>: Send + Sync + From<[u8; KEY_SIZE]> + Z
     ) -> Result<&'a [u8], Error>;
 }
 
-impl AEADKey<{ chacha20poly1305::KEY_LEN }> for ChaCha20Poly1305Key {
+impl AEADKey for ChaCha20Poly1305Key {
     type Tag = AeadTag<{ chacha20poly1305::TAG_LEN }>;
     type Nonce = AeadNonce<{ chacha20poly1305::NONCE_LEN }>;
 
     const SCHEME: AEADAlgorithm = AEADAlgorithm::ChaCha20Poly1305;
     const KEY_LEN: usize = chacha20poly1305::KEY_LEN;
+    const KEY_SIZE: usize = chacha20poly1305::KEY_LEN;
 
     fn encrypt<'a>(
         &self,
@@ -115,13 +117,13 @@ fn map_library_error(err: AgentError) -> Error {
     }
 }
 
-impl AEADKey<{ size_of::<KeyID<ChaCha20Poly1305>>() }> for KeyID<ChaCha20Poly1305> {
+impl AEADKey for KeyID<ChaCha20Poly1305> {
     type Tag = AeadTag<{ chacha20poly1305::TAG_LEN }>;
     type Nonce = AeadNonce<{ chacha20poly1305::NONCE_LEN }>;
 
     const SCHEME: AEADAlgorithm = AEADAlgorithm::ChaCha20Poly1305;
     const KEY_LEN: usize = chacha20poly1305::KEY_LEN;
-
+    const KEY_SIZE: usize = size_of::<KeyID<ChaCha20Poly1305>>();
     fn encrypt<'a>(
         &self,
         ct: &'a mut [u8],

@@ -19,7 +19,6 @@ use zeroize::ZeroizeOnDrop;
 pub enum Error {
     Internal(String),
     Derive,
-    KeyGen,
 }
 
 pub type DefaultNIKEKey = X25519SecretKey;
@@ -45,7 +44,7 @@ impl Nike for X25519 {}
 /// ```
 pub trait NIKESecretKey: Send + Sync + Sized + ZeroizeOnDrop{
     type PublicKey: Debug + NetworkObject;
-    type SharedSecret: HkdfIkm + NetworkObject + ZeroizeOnDrop;
+    type SharedSecret: HkdfIkm + NetworkObject;
     const SCHEME: NIKEScheme;
 
     // Generate a private-public key pair
@@ -70,7 +69,7 @@ impl NIKESecretKey for KeyID<X25519> {
             .ok_or_else(|| Error::Internal("No agent available".into()))?
             .x25519_generate_key_id()
             .map(|(id, pk)| (Self::new(id), pk))
-            .map_err(|_| Error::KeyGen)
+            .map_err(|err| Error::Internal(err.to_string()))
     }
 
     fn derive(self, pk: Self::PublicKey) -> Result<KeyID<SharedKey>, Error> {
@@ -78,7 +77,7 @@ impl NIKESecretKey for KeyID<X25519> {
             .ok_or_else(|| Error::Internal("No agent available".into()))?
             .x25519_derive_for_key_id(self.get_id().clone(), pk)
             .map(KeyID::<SharedKey>::new)
-            .map_err(|_| Error::Derive)
+            .map_err(map_derive_err)
     }
 }
 
@@ -95,7 +94,7 @@ impl NIKESecretKey for X25519SecretKey {
         let mut rand = [0u8; 32];
         rng.fill_bytes(&mut rand);
         let (pub_key, priv_key) =
-            curve25519::X25519::generate_pair(&rand).map_err(|_| Error::KeyGen)?;
+            curve25519::X25519::generate_pair(&rand).map_err(|err|  Error::Internal(err.to_string()))?;
 
         let key = X25519SecretKey::new(priv_key);
         let pk = X25519PublicKey::new(pub_key);
@@ -103,8 +102,16 @@ impl NIKESecretKey for X25519SecretKey {
     }
 
     fn derive(self, pk: Self::PublicKey) -> Result<Self::SharedSecret, Error> {
-        X25519SecretKey::derive(&self, &pk).map_err(|_| Error::Derive)
+        X25519SecretKey::derive(&self, &pk).map_err(map_derive_err)
     }
 }
+
+fn map_derive_err(err: libcrux_agent::Error) -> Error {
+    match err {
+        libcrux_agent::Error::Derive => Error::Derive,
+        e => Error::Internal(e.to_string())
+    }
+}
+
 impl NetworkObject for X25519PublicKey {}
 impl NetworkObject for SharedKey {}

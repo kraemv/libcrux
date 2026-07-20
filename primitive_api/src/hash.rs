@@ -17,10 +17,14 @@ pub type DefaultHash = libcrux_sha2::Sha256;
 ///
 /// DefaultHash::hash(&mut digest, msg)
 /// ```
-pub trait Hash<const N: usize>: Digest<N> + Send + Sync {
+pub trait Hash<const N: usize>: Send + Sync {
     const SCHEME: HashAlgo;
 
     fn init() -> Self;
+
+    fn hash(payload: &[u8]) -> [u8; N];
+
+    fn update(&mut self, payload: &[u8]) -> &mut Self;
 
     fn fork(&self) -> Self;
 
@@ -32,6 +36,15 @@ impl Hash<{ libcrux_sha2::SHA256_LENGTH }> for libcrux_sha2::Sha256 {
 
     fn init() -> Self {
         libcrux_sha2::Sha256::new()
+    }
+
+    fn hash(payload: &[u8]) -> [u8; libcrux_sha2::SHA256_LENGTH] {
+        libcrux_sha2::sha256(payload)
+    }
+
+    fn update(&mut self, payload: &[u8]) -> &mut Self{
+        Digest::update(self, payload);
+        self
     }
 
     fn fork(&self) -> Self {

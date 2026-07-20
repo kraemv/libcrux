@@ -6,13 +6,16 @@ use libcrux_hkdf;
 use libcrux_sha2::{Sha256, SHA256_LENGTH};
 use zeroize::ZeroizeOnDrop;
 
+use crate::aead::AEADKey;
 use crate::hash::Hash;
+use crate::mac::AuthenticationKey;
 use crate::provider::get_agent;
-use crate::{AgentLib, Implementation, KeyID, Lib, NetworkObject, RandomKey};
+use crate::{AgentLib, Implementation, KeyID, Lib, NetworkObject};
 
 /// HKDF Errors
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
+    Conversion,
     Internal(String),
     Extract,
     Expand,
@@ -20,14 +23,25 @@ pub enum Error {
 
 pub type DefaultHKDF = Hkdf<SHA256_LENGTH, Sha256, Lib>;
 
-pub trait SaltValue {}
-pub trait HkdfIkm: ZeroizeOnDrop{}
+pub trait SaltValue: for<'a> TryFrom<&'a [u8]> {}
+pub trait HkdfIkm: ZeroizeOnDrop + for<'a> TryFrom<&'a [u8]> {}
 
 impl SaltValue for KeyID<RandomKey> {}
 impl SaltValue for RandomKey {}
+impl SaltValue for Vec<u8> {}
 
 impl HkdfIkm for KeyID<SharedKey> {}
 impl HkdfIkm for SharedKey {}
+
+pub trait KeyMaterial: ZeroizeOnDrop{
+    fn to_aead_key<Algo: AEADKey>(self) -> Result<Algo, Error>;
+
+    fn to_mac_key<Algo: AuthenticationKey>(self) -> Result<Algo, Error>;
+
+    fn to_pseudorandom_key<Algo: HKDFKey>(self) -> Result<Algo, Error>;
+
+    fn to_salt<Algo: SaltValue>(self) -> Result<Algo, Error>;
+}
 
 /// Minimal example:
 /// ```
@@ -51,7 +65,7 @@ impl HkdfIkm for SharedKey {}
 /// assert_eq!(okm_a, okm_b)
 /// ```
 pub trait RandomnessExtractor: Send + Sync {
-    type Salt: SaltValue + for<'a> TryFrom<&'a [u8]>;
+    type Salt: SaltValue;
     type PublicExtractor: SaltedRandomnessExtractor;
     type SecretExtractor: SaltedRandomnessExtractor;
 
@@ -61,17 +75,17 @@ pub trait RandomnessExtractor: Send + Sync {
 }
 
 pub trait SaltedRandomnessExtractor {
-    type Key: HkdfIkm + for<'a> TryFrom<&'a [u8]>;
-    type Prk: HKDFKey + for<'a> TryFrom<&'a [u8]>;
+    type Key: HkdfIkm;
+    type Prk: HKDFKey;
 
     fn extract_without_key(self) -> Result<impl HKDFKey, Error>;
 
     fn extract_with_key(self, key: Self::Key) -> Result<Self::Prk, Error>;
 }
 
-pub trait HKDFKey: Send + Sync + ZeroizeOnDrop {
+pub trait HKDFKey: Send + Sync + for<'a> TryFrom<&'a [u8]> + ZeroizeOnDrop {
     const N: usize;
-    type Okm: NetworkObject;
+    type Okm: NetworkObject + KeyMaterial;
 
     fn expand(&self, output_len: usize, info: &[u8]) -> Result<Self::Okm, Error>;
 
@@ -84,6 +98,9 @@ pub struct Hkdf<const N: usize, Algo: Hash<N>, Impl: Implementation>(PhantomData
 
 pub struct Sha256SaltedHKDF<Impl: Implementation>(Vec<u8>, PhantomData<Impl>);
 pub struct Sha256SecretSaltedHKDF(KeyID<RandomKey>);
+
+#[derive(Debug, PartialEq, Eq, ZeroizeOnDrop)]
+pub struct RandomKey(Vec<u8>);
 
 impl<const N: usize, Algo: Hash<N>, Impl: Implementation> Hkdf<N, Algo, Impl> {
     pub const fn new() -> Self {
@@ -206,6 +223,7 @@ impl HKDFKey for KeyID<Sha256> {
             .hkdf_expand(self.get_id().clone(), output_len, info)
             .map(|id| agent.export_nonce(id).map_err(|_| Error::Expand))
             .map_err(|_| Error::Expand)?
+            .map(RandomKey)
     }
 }
 
@@ -217,9 +235,60 @@ impl HKDFKey for HkdfSha256PRK {
         self.sha2_256_hkdf_expand(info, output_len)
             .map(|okm| okm.into_vec())
             .map_err(|_| Error::Expand)
+            .map(RandomKey)
     }
 
     fn expand_declassify(&self, output_len: usize, info: &[u8]) -> Result<RandomKey, Error> {
         self.expand(output_len, info)
+    }
+}
+
+impl KeyMaterial for KeyID<RandomKey> {
+    fn to_aead_key<Algo: AEADKey>(self) -> Result<Algo, Error> {
+        Algo::try_from(self.as_ref()).map_err(|_| Error::Conversion)
+    }
+
+    fn to_mac_key<Algo: AuthenticationKey>(self) -> Result<Algo, Error> {
+        Algo::try_from(self.as_ref()).map_err(|_| Error::Conversion)
+    }
+
+    fn to_pseudorandom_key<Algo: HKDFKey>(self) -> Result<Algo, Error> {
+        Algo::try_from(self.as_ref()).map_err(|_| Error::Conversion)
+    }
+
+    fn to_salt<Algo: SaltValue>(self) -> Result<Algo, Error> {
+        Algo::try_from(self.as_ref()).map_err(|_| Error::Conversion)
+    }
+}
+
+impl KeyMaterial for RandomKey {
+    fn to_aead_key<Algo: AEADKey>(self) -> Result<Algo, Error> {
+        Algo::try_from(self.as_ref()).map_err(|_| Error::Conversion)
+    }
+
+    fn to_mac_key<Algo: AuthenticationKey>(self) -> Result<Algo, Error> {
+        Algo::try_from(self.as_ref()).map_err(|_| Error::Conversion)
+    }
+
+    fn to_pseudorandom_key<Algo: HKDFKey>(self) -> Result<Algo, Error> {
+        Algo::try_from(self.as_ref()).map_err(|_| Error::Conversion)
+    }
+
+    fn to_salt<Algo: SaltValue>(self) -> Result<Algo, Error> {
+        Algo::try_from(self.as_ref()).map_err(|_| Error::Conversion)
+    }
+}
+
+impl NetworkObject for RandomKey{}
+
+impl From<&[u8]> for RandomKey {
+    fn from(value: &[u8]) -> Self {
+        Self(value.to_vec())
+    }
+}
+
+impl AsRef<[u8]> for RandomKey {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_slice()
     }
 }

@@ -7,7 +7,6 @@ use crate::{provider::get_agent, KeyID, NetworkObject};
 pub enum Error {
     Internal(String),
     InvalidTag,
-    Verify,
 }
 
 pub enum MacAlgorithm {
@@ -32,7 +31,7 @@ pub type DefaultHmacKey = HmacSha256Key;
 /// let shk_b = match auth_key.verify(msg, &tag) {
 ///     Ok(_) => println!("Valid Tag"),
 ///     Err(Error::InvalidTag) => println!("Invalid Tag"),
-///     Err(Error::Verify) => println!("Verification had an internal error"),
+///     Err(Error::Internal(s)) => println!("{}", s),
 ///     _ => println!("Unexpected Error"),
 /// };
 /// ```
@@ -53,13 +52,13 @@ impl AuthenticationKey for KeyID<Sha2_256HMAC> {
         get_agent()
             .ok_or_else(|| Error::Internal("No agent available".into()))?
             .hmac_sha2_256_authenticate(self.get_id().clone(), msg)
-            .map_err(|_| Error::Internal("Agent signing failed".into()))
+            .map_err(|_| Error::Internal("Agent authentication failed".into()))
     }
 
     fn verify(&self, msg: &[u8], tag: &Self::Tag) -> Result<(), Error> {
         let new_tag = self
             .authenticate(msg)
-            .map_err(|_| Error::Internal("Agent signing failed".into()))?;
+            .map_err(|_| Error::Internal("Agent authentication failed".into()))?;
         (&new_tag == tag).then_some(()).ok_or(Error::InvalidTag)
     }
 }
@@ -75,7 +74,7 @@ impl AuthenticationKey for HmacSha256Key {
     fn verify(&self, msg: &[u8], tag: &Self::Tag) -> Result<(), Error> {
         let new_tag = self
             .authenticate(msg)
-            .map_err(|_| Error::Internal("Agent signing failed".into()))?;
+            .map_err(|_| Error::Internal("Authentication failed".into()))?;
         (&new_tag == tag).then_some(()).ok_or(Error::InvalidTag)
     }
 }

@@ -3,13 +3,11 @@ pub use libcrux_agent::KeyID;
 pub mod aead;
 pub mod hash;
 pub mod hkdf;
-pub mod hmac;
+pub mod mac;
 pub mod kem;
 pub mod nike;
 mod provider;
 pub mod signature;
-
-pub type RandomKey = Vec<u8>;
 
 pub trait Implementation {}
 

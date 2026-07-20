@@ -1,3 +1,4 @@
+use core::fmt;
 use std::sync::PoisonError;
 
 use zerocopy::*;
@@ -12,6 +13,7 @@ pub enum Error {
     AEAD,
     Derive,
     DuplicateKey,
+    Decapsulate,
     Encoding,
     Expand,
     InvalidTag,
@@ -22,6 +24,7 @@ pub enum Error {
     MalformedMessage,
     NoAgent,
     PublicKey,
+    Rejected,
     RNG,
     Signing,
     Sync,
@@ -50,6 +53,33 @@ impl<T> From<PoisonError<T>> for Error{
 impl From<GenerateSecretError> for Error{
     fn from(_: GenerateSecretError) -> Self {
         Error::KeyExchange
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::AEAD => write!(f, "AEAD error"),
+            Error::Derive => write!(f, "key derivation error"),
+            Error::Decapsulate => write!(f, "Decapsulation failed"),
+            Error::DuplicateKey => write!(f, "duplicate key"),
+            Error::Encoding => write!(f, "encoding error"),
+            Error::Expand => write!(f, "expand error"),
+            Error::InvalidTag => write!(f, "invalid tag"),
+            Error::IO => write!(f, "I/O error"),
+            Error::HKDF => write!(f, "HKDF error"),
+            Error::KeyExchange => write!(f, "key exchange error"),
+            Error::MAC => write!(f, "MAC error"),
+            Error::MalformedMessage => write!(f, "malformed message"),
+            Error::NoAgent => write!(f, "no agent"),
+            Error::PublicKey => write!(f, "public key error"),
+            Error::Rejected => write!(f, "Rejected ciphertext"),
+            Error::RNG => write!(f, "random number generator error"),
+            Error::Signing => write!(f, "signing error"),
+            Error::Sync => write!(f, "synchronization error"),
+            Error::UnknownID => write!(f, "unknown ID"),
+            Error::Unsupported => write!(f, "unsupported operation"),
+        }
     }
 }
 

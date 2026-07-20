@@ -88,6 +88,14 @@ impl<const N: usize> From<[u8; N]> for AeadTag<N> {
     }
 }
 
+impl TryFrom<&[u8]> for ChaCha20Poly1305Key {
+    type Error = crate::Error;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        Ok(Self(*value.as_array().ok_or(Error::Unsupported)?))
+    }
+}
+
 impl From<[u8; 32]> for ChaCha20Poly1305Key {
     fn from(value: [u8; 32]) -> Self {
         Self(value)
