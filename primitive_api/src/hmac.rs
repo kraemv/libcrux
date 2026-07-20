@@ -7,8 +7,6 @@ use crate::{provider::get_agent, KeyID, NetworkObject};
 pub enum Error {
     Internal(String),
     InvalidTag,
-    InvalidKey,
-    InputTooLarge,
     Verify,
 }
 

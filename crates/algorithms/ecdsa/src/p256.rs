@@ -18,6 +18,7 @@ pub struct Signature ([u8; 64]);
 pub struct Nonce([u8; 32]);
 
 /// An ECDSA P-256 private key
+#[derive(ZeroizeOnDrop)]
 pub struct PrivateKey([u8; 32]);
 
 /// An ECDSA P-256 public key

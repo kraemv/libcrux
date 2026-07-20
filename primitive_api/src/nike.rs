@@ -20,8 +20,6 @@ pub enum Error {
     Internal(String),
     Derive,
     KeyGen,
-    InvalidKey,
-    InputTooLarge,
 }
 
 pub type DefaultNIKEKey = X25519SecretKey;

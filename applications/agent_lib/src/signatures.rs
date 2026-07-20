@@ -25,6 +25,7 @@ pub struct EcDsaP256PublicKey<DigestAlg> {
     _marker: PhantomData<DigestAlg>,
 }
 
+#[derive(ZeroizeOnDrop)]
 pub struct EcDsaP256PrivateKey<DigestAlg> {
     key: ecdsa::p256::PrivateKey,
     _marker: PhantomData<DigestAlg>,

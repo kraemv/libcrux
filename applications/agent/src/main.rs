@@ -36,6 +36,6 @@ fn main() {
         };
         let response =
             request_handler::handle_request(&new_request).unwrap_or_else(|err| err.into());
-        tx1.send(response.into_bytes().as_ref()).unwrap();
+        let Ok(()) = tx1.send(response.into_bytes().as_ref()) else {break;};
     }
 }

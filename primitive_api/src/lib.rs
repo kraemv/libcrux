@@ -19,7 +19,7 @@ pub struct AgentLib {}
 impl Implementation for Lib {}
 impl Implementation for AgentLib {}
 
-pub trait NetworkObject: Send + Sync + Sized + AsRef<[u8]> + for<'a> TryFrom<&'a [u8]> {}
+pub trait NetworkObject: Send + Sync + AsRef<[u8]> + for<'a> TryFrom<&'a [u8]> {}
 
 impl NetworkObject for Vec<u8> {}
 
