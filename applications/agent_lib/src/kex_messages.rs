@@ -57,8 +57,8 @@ pub struct X25519DeriveResponse {
 }
 
 impl X25519DeriveRequest {
-    pub fn new(id: ID, key: kx::X25519PublicKey) -> Self {
-        Self { id, key }
+    pub fn new(id: ID, key: &kx::X25519PublicKey) -> Self {
+        Self { id, key: *key }
     }
 
     pub fn get_id(&self) -> &ID {

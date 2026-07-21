@@ -242,7 +242,7 @@ impl Agent {
         Ok((r.get_id().clone(), X25519PublicKey::from(r)))
     }
 
-    pub fn x25519_derive_for_key_id(&self, id: ID, pk: X25519PublicKey) -> Result<ID, Error> {
+    pub fn x25519_derive_for_key_id(&self, id: ID, pk: &X25519PublicKey) -> Result<ID, Error> {
         let response = self.send_recv(IPCRequest::from(X25519DeriveRequest::new(id, pk)))?;
         let payload = Self::expect_kind(&response, MessageKind::X25519Derive)?;
         let r = X25519DeriveResponse::try_ref_from_bytes(payload)?;

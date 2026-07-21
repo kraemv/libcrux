@@ -51,7 +51,7 @@ pub trait NIKESecretKey: Send + Sync + Sized + ZeroizeOnDrop{
     fn keygen() -> Result<(Self, Self::PublicKey), Error>;
 
     // Derive a shared secret
-    fn derive(self, pk: Self::PublicKey) -> Result<Self::SharedSecret, Error>;
+    fn derive(&self, pk: &Self::PublicKey) -> Result<Self::SharedSecret, Error>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -72,7 +72,7 @@ impl NIKESecretKey for KeyID<X25519> {
             .map_err(|err| Error::Internal(err.to_string()))
     }
 
-    fn derive(self, pk: Self::PublicKey) -> Result<KeyID<SharedKey>, Error> {
+    fn derive(&self, pk: &Self::PublicKey) -> Result<KeyID<SharedKey>, Error> {
         get_agent()
             .ok_or_else(|| Error::Internal("No agent available".into()))?
             .x25519_derive_for_key_id(self.get_id().clone(), pk)
@@ -101,8 +101,8 @@ impl NIKESecretKey for X25519SecretKey {
         Ok((key, pk))
     }
 
-    fn derive(self, pk: Self::PublicKey) -> Result<Self::SharedSecret, Error> {
-        X25519SecretKey::derive(&self, &pk).map_err(map_derive_err)
+    fn derive(&self, pk: &Self::PublicKey) -> Result<Self::SharedSecret, Error> {
+        X25519SecretKey::derive(self, pk).map_err(map_derive_err)
     }
 }
 
