@@ -10,12 +10,10 @@ pub type DefaultHash = libcrux_sha2::Sha256;
 /// Minimal example:
 /// ```
 /// use libcrux_primitive_api::hash::*;
-/// use libcrux_traits::Digest;
 ///
 /// let msg = b"Insight must precede application";
-/// let mut digest = [0u8; 32];
 ///
-/// DefaultHash::hash(&mut digest, msg)
+/// let digest = DefaultHash::hash(msg);
 /// ```
 pub trait Hash<const N: usize>: Send + Sync {
     const SCHEME: HashAlgo;

@@ -17,7 +17,6 @@ use crate::{AgentLib, Implementation, KeyID, Lib, NetworkObject};
 pub enum Error {
     Conversion,
     Internal(String),
-    Extract,
     Expand,
 }
 
@@ -153,7 +152,7 @@ impl SaltedRandomnessExtractor for Sha256SaltedHKDF<AgentLib> {
         let ikm = [0u8; SHA256_LENGTH];
         libcrux_hkdf::sha2_256::extract(&mut prk, &self.0, &ikm)
             .map(|()| HkdfSha256PRK::new(prk))
-            .map_err(|_| Error::Extract)
+            .map_err(map_hkdf_error)
     }
 
     fn extract_with_key(self, key: Self::Key) -> Result<Self::Prk, Error> {
@@ -161,7 +160,7 @@ impl SaltedRandomnessExtractor for Sha256SaltedHKDF<AgentLib> {
             .ok_or_else(|| Error::Internal("No agent available".into()))?
             .hkdf_extract_public_salt(key.get_id().clone(), &self.0)
             .map(KeyID::<Sha256>::new)
-            .map_err(|_| Error::Extract)
+            .map_err(map_lib_error)
     }
 }
 
@@ -174,14 +173,14 @@ impl SaltedRandomnessExtractor for Sha256SaltedHKDF<Lib> {
         let ikm = [0u8; SHA256_LENGTH];
         libcrux_hkdf::sha2_256::extract(&mut prk, &self.0, &ikm)
             .map(|()| HkdfSha256PRK::new(prk))
-            .map_err(|_| Error::Extract)
+            .map_err(map_hkdf_error)
     }
 
     fn extract_with_key(self, key: Self::Key) -> Result<Self::Prk, Error> {
         let mut prk = [0u8; 32];
         libcrux_hkdf::sha2_256::extract(&mut prk, &self.0, key.as_ref())
             .map(|()| HkdfSha256PRK::new(prk))
-            .map_err(|_| Error::Extract)
+            .map_err(map_hkdf_error)
     }
 }
 
@@ -194,7 +193,7 @@ impl SaltedRandomnessExtractor for Sha256SecretSaltedHKDF {
             .ok_or_else(|| Error::Internal("No agent available".into()))?
             .hkdf_extract_secret_salt(None, self.0.get_id().clone())
             .map(KeyID::<Sha256>::new)
-            .map_err(|_| Error::Extract)
+            .map_err(map_lib_error)
     }
 
     fn extract_with_key(self, key: Self::Key) -> Result<Self::Prk, Error> {
@@ -202,7 +201,7 @@ impl SaltedRandomnessExtractor for Sha256SecretSaltedHKDF {
             .ok_or_else(|| Error::Internal("No agent available".into()))?
             .hkdf_extract_secret_salt(Some(key.get_id().clone()), self.0.get_id().clone())
             .map(KeyID::<Sha256>::new)
-            .map_err(|_| Error::Extract)
+            .map_err(map_lib_error)
     }
 }
 impl HKDFKey for KeyID<Sha256> {
@@ -214,15 +213,15 @@ impl HKDFKey for KeyID<Sha256> {
             .ok_or_else(|| Error::Internal("No agent available".into()))?
             .hkdf_expand(self.get_id().clone(), output_len, info)
             .map(KeyID::<RandomKey>::new)
-            .map_err(|_| Error::Expand)
+            .map_err(map_lib_error)
     }
 
     fn expand_declassify(&self, output_len: usize, info: &[u8]) -> Result<RandomKey, Error> {
         let agent = get_agent().ok_or_else(|| Error::Internal("No agent available".into()))?;
         agent
             .hkdf_expand(self.get_id().clone(), output_len, info)
-            .map(|id| agent.export_nonce(id).map_err(|_| Error::Expand))
-            .map_err(|_| Error::Expand)?
+            .map(|id| agent.export_nonce(id).map_err(map_lib_error))
+            .map_err(map_lib_error)?
             .map(RandomKey)
     }
 }
@@ -240,6 +239,21 @@ impl HKDFKey for HkdfSha256PRK {
 
     fn expand_declassify(&self, output_len: usize, info: &[u8]) -> Result<RandomKey, Error> {
         self.expand(output_len, info)
+    }
+}
+
+fn map_lib_error(err: libcrux_agent::Error) -> Error {
+    match err {
+        libcrux_agent::Error::Expand => Error::Expand,
+        e => Error::Internal(e.to_string()),
+    }
+}
+
+fn map_hkdf_error(err: libcrux_hkdf::ExtractError) -> Error {
+    match err {
+        libcrux_hkdf::ExtractError::ArgumentTooLong => Error::Internal("Input arguments too long".into()),
+        libcrux_hkdf::ExtractError::PrkTooShort => Error::Internal("Internal error: Prk too short".into()),
+        libcrux_hkdf::ExtractError::Unknown => Error::Internal("Unknown internal error".into()),
     }
 }
 

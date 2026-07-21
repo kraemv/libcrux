@@ -34,8 +34,8 @@ pub type DefaultAEADKey = ChaCha20Poly1305Key;
 /// rng.try_fill_bytes(&mut nonce).unwrap();
 ///
 /// let key = DefaultAEADKey::from(key_material);
-/// let nonce_1 = <DefaultAEADKey as AEADKey<32>>::Nonce::try_from(nonce).expect("Nonce generation failed");
-/// let nonce_2 = <DefaultAEADKey as AEADKey<32>>::Nonce::try_from(nonce).expect("Nonce generation failed");
+/// let nonce_1 = <DefaultAEADKey as AEADKey>::Nonce::try_from(nonce).expect("Nonce generation failed");
+/// let nonce_2 = <DefaultAEADKey as AEADKey>::Nonce::try_from(nonce).expect("Nonce generation failed");
 /// let mut ct = [0u8; 12];
 /// let mut pt = [0u8; 12];
 /// let msg = b"Test message";
@@ -93,7 +93,7 @@ impl AEADKey for ChaCha20Poly1305Key {
         aad: &[u8],
         plaintext: &[u8],
     ) -> Result<(&'a [u8], Self::Tag), Error> {
-        self.encrypt_msg(ct, nonce, aad, plaintext).map_err(|_| Error::Encrypt)
+        self.encrypt_msg(ct, nonce, aad, plaintext).map_err(map_encrypt_error)
     }
 
     fn decrypt<'a>(
@@ -105,15 +105,22 @@ impl AEADKey for ChaCha20Poly1305Key {
         tag: Self::Tag,
     ) -> Result<&'a [u8], Error> {
         self.decrypt_msg(pt, nonce, aad, ciphertext, tag)
-            .map_err(map_library_error)
+            .map_err(map_decrypt_error)
     }
 }
 
-fn map_library_error(err: AgentError) -> Error {
+fn map_encrypt_error(err: AgentError) -> Error {
+    match err {
+        AgentError::AEAD => Error::Encrypt,
+        _ => Error::Internal(err.to_string()),
+    }
+}
+
+fn map_decrypt_error(err: AgentError) -> Error {
     match err {
         AgentError::AEAD => Error::Decrypt,
         AgentError::InvalidTag => Error::InvalidTag,
-        _ => Error::Internal("Internal Error occured".into()),
+        _ => Error::Internal(err.to_string()),
     }
 }
 
@@ -141,7 +148,7 @@ impl AEADKey for KeyID<ChaCha20Poly1305> {
                 plaintext,
                 aad,
             )
-            .map_err(|_| Error::Encrypt)
+            .map_err(map_encrypt_error)
     }
 
     fn decrypt<'a>(
@@ -163,7 +170,7 @@ impl AEADKey for KeyID<ChaCha20Poly1305> {
                 ciphertext,
                 aad,
             )
-            .map_err(|_| Error::Decrypt)
+            .map_err(map_decrypt_error)
     }
 }
 

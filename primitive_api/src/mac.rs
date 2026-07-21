@@ -18,7 +18,7 @@ pub type DefaultHmacKey = HmacSha256Key;
 /// ```
 /// use rand::{TryRng, rngs::SysRng};
 ///
-/// use libcrux_primitive_api::hmac::*;
+/// use libcrux_primitive_api::mac::*;
 ///
 /// let mut rng = SysRng;
 /// let mut key_material = [0u8; 32];
