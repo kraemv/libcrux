@@ -166,7 +166,7 @@ impl Agent {
         id: ID,
         plaintext: &'a mut [u8],
         nonce: [u8; CHACHA_NONCE_LEN],
-        tag: [u8; CHACHA_TAG_LEN],
+        tag: &[u8; CHACHA_TAG_LEN],
         ciphertext: &[u8],
         aad: &[u8],
     ) -> Result<&'a [u8], Error> {
@@ -175,7 +175,7 @@ impl Agent {
             ChaCha20Poly1305,
             CHACHA_NONCE_LEN,
             CHACHA_TAG_LEN,
-        >::new(id, ciphertext, tag, nonce, aad));
+        >::new(id, ciphertext, *tag, nonce, aad));
         let response = self.send_recv(request)?;
 
         let payload = Self::expect_kind(&response, MessageKind::ChaCha20Poly1305Decrypt)?;

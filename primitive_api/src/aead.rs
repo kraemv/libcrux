@@ -43,7 +43,7 @@ pub type DefaultAEADKey = ChaCha20Poly1305Key;
 ///
 ///
 /// let (ct, tag) = key.encrypt(&mut ct, nonce_1, aad, msg).expect("Encryption failed");
-/// let pt = match key.decrypt(&mut pt, nonce_2, aad, ct, tag) {
+/// let pt = match key.decrypt(&mut pt, nonce_2, aad, ct, &tag) {
 ///     Ok(msg) => msg,
 ///     Err(Error::InvalidTag) => return println!("Invalid Tag"),
 ///     Err(Error::Decrypt) => return println!("Decryption had an internal error"),
@@ -74,7 +74,7 @@ pub trait AEADKey: Send + Sync + for<'a> TryFrom<&'a [u8]> + ZeroizeOnDrop{
         nonce: Self::Nonce,
         aad: &[u8],
         ciphertext: &[u8],
-        tag: Self::Tag,
+        tag: &Self::Tag,
     ) -> Result<&'a [u8], Error>;
 }
 
@@ -102,7 +102,7 @@ impl AEADKey for ChaCha20Poly1305Key {
         nonce: Self::Nonce,
         aad: &[u8],
         ciphertext: &[u8],
-        tag: Self::Tag,
+        tag: &Self::Tag,
     ) -> Result<&'a [u8], Error> {
         self.decrypt_msg(pt, nonce, aad, ciphertext, tag)
             .map_err(map_decrypt_error)
@@ -157,7 +157,7 @@ impl AEADKey for KeyID<ChaCha20Poly1305> {
         nonce: Self::Nonce,
         aad: &[u8],
         ciphertext: &[u8],
-        tag: Self::Tag,
+        tag: &Self::Tag,
     ) -> Result<&'a [u8], Error> {
         let agent = get_agent().ok_or_else(|| Error::Internal("No agent available".into()))?;
 
@@ -166,7 +166,7 @@ impl AEADKey for KeyID<ChaCha20Poly1305> {
                 self.get_id().clone(),
                 pt,
                 nonce.into(),
-                tag.into(),
+                tag.as_ref(),
                 ciphertext,
                 aad,
             )

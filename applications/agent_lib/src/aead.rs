@@ -34,10 +34,10 @@ impl ChaCha20Poly1305Key {
         nonce: AeadNonce<CHACHA_NONCE_LEN>,
         aad: &[u8],
         ciphertext: &[u8],
-        tag: AeadTag<CHACHA_TAG_LEN>,
+        tag: &AeadTag<CHACHA_TAG_LEN>,
     ) -> Result<&'a [u8], crate::Error> {
         let nonce: [u8; CHACHA_NONCE_LEN] = nonce.into();
-        let tag: [u8; CHACHA_TAG_LEN] = tag.into();
+        let tag: [u8; CHACHA_TAG_LEN] = tag.0;
         let key = ChaCha20Key::from(self.0);
         key.decrypt(pt, &nonce.into(), aad, ciphertext, &tag.into())
             .map_err(map_libcrux_decrypt_error)
@@ -121,6 +121,12 @@ impl<const N: usize> TryFrom<&[u8]> for AeadTag<N> {
 
 impl<const N: usize> AsRef<[u8]> for AeadTag<N> {
     fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl<const N: usize> AsRef<[u8; N]> for AeadTag<N> {
+    fn as_ref(&self) -> &[u8; N] {
         &self.0
     }
 }
