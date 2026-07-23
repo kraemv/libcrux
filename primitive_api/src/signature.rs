@@ -88,7 +88,8 @@ impl Sig for EcDsaP256 {}
 /// Length requirements for variable length input/output schemes
 ///
 /// In future: Default is PQ
-pub trait SigningKey: Send + Sync + Sized + for<'a> TryFrom<PrivatePkcs8KeyDer<'a>> + ZeroizeOnDrop {
+pub trait SigningKey:
+Send + Sync + Sized + for<'a> TryFrom<PrivatePkcs8KeyDer<'a>> + ZeroizeOnDrop {
     type PublicKey: VerificationKey + NetworkObject;
     type Signature: NetworkObject;
     const SCHEME: SignatureScheme;
@@ -120,6 +121,7 @@ pub enum SignatureScheme {
 }
 
 const LOCAL_KEY_ID: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.113549.1.9.21");
+const SHA256: DigestAlgorithm = DigestAlgorithm::Sha256;
 
 #[derive(Clone, Debug, ZeroizeOnDrop)]
 pub struct SigningKeyID<Scheme: Sig, Vk: VerificationKey + ZeroizeOnDrop> {
@@ -178,13 +180,13 @@ impl SigningKey for SigningKeyID<Ed25519, Ed25519PublicKey> {
 impl SigningKey for SigningKeyID<EcDsaP256, EcDsaP256PublicKey<SHA256>> {
     type PublicKey = EcDsaP256PublicKey<SHA256>;
     type Signature = signatures::EcDsaP256Signature<SHA256>;
-    const SCHEME: SignatureScheme = SignatureScheme::EcDsaP256(DigestAlgorithm::Sha256);
+    const SCHEME: SignatureScheme = SignatureScheme::EcDsaP256(SHA256);
 
     fn sign(&self, payload: &[u8]) -> Result<Self::Signature, Error> {
-        let agent = get_agent().ok_or_else(|| Error::Internal("No agent available".into()))?;
-        agent
+        get_agent()
+            .ok_or_else(|| Error::Internal("No agent available".into()))?
             .ecdsa_p256_sign_for_id(self.id.clone(), payload)
-            .map_err(|_| Error::Internal("Agent signing failed".into()))
+            .map_err(|e| Error::Internal(e.to_string()))
     }
 
     fn to_public(&self) -> Self::PublicKey {
@@ -195,31 +197,26 @@ impl SigningKey for SigningKeyID<EcDsaP256, EcDsaP256PublicKey<SHA256>> {
 impl SigningKey for EcdsaP256SigningKey {
     type PublicKey = EcDsaP256PublicKey<SHA256>;
     type Signature = signatures::EcDsaP256Signature<SHA256>;
-    const SCHEME: SignatureScheme = SignatureScheme::EcDsaP256(DigestAlgorithm::Sha256);
+    const SCHEME: SignatureScheme = SignatureScheme::EcDsaP256(SHA256);
 
     fn keygen() -> Result<(Self, Self::PublicKey), Error> {
-        let mut rng = UnwrapErr(
-            HmacDrbgSha256::try_from_rng(&mut SysRng)
-                .map_err(|_| Error::Internal("RNG init failed".into()))?,
-        );
-        let sk = p256::rand::random_scalar(&mut rng).map_err(|_ | Error::Internal("Key generation failed".into()))?;
-        let sk = p256::PrivateKey::try_from(&sk).map_err(|_| Error::Internal("Key generation failed".into()))?;
-        p256::secret_to_public(&sk)
-            .map(|vk| (Self{sk: EcDsaP256PrivateKey::<SHA256>::from(sk)}, EcDsaP256PublicKey::<SHA256>::from(vk)))
-            .map_err(|_| Error::Internal("Key generation failed".into()))
+        let mut rng = UnwrapErr(SysRng);
+
+        let sk = p256::rand::random_scalar(&mut rng)?;
+        let sk = p256::PrivateKey::try_from(&sk)?;
+        let vk = p256::secret_to_public(&sk)?;
+
+        Ok((Self{sk: sk.into()}, vk.into()))
     }
 
     fn sign(&self, payload: &[u8]) -> Result<Self::Signature, Error> {
-        let mut rng = UnwrapErr(
-            HmacDrbgSha256::try_from_rng(&mut SysRng)
-                .map_err(|_| Error::Internal("RNG init failed".into()))?,
-        );
-        self.sk.sign(payload, &mut rng)
+        self.sk.sign(payload, &mut UnwrapErr(SysRng))
             .map_err(|_| Error::Internal("Payload too long".into()))
     }
 
     fn to_public(&self) -> Self::PublicKey {
-        EcDsaP256PublicKey::<SHA256>::from(p256::secret_to_public(self.sk.get_key()).unwrap())
+        let vk = p256::secret_to_public(self.sk.get_key()).unwrap();
+        EcDsaP256PublicKey::<SHA256>::from(vk)
     }
 }
 
@@ -230,8 +227,7 @@ impl SigningKey for Ed25519SigningKey {
 
     fn keygen() -> Result<(Self, Self::PublicKey), Error> {
         let mut rng = UnwrapErr(
-            HmacDrbgSha256::try_from_rng(&mut SysRng)
-                .map_err(|_| Error::Internal("RNG init failed".into()))?,
+            HmacDrbgSha256::try_from_rng(&mut SysRng)?
         );
         ed25519::generate_key_pair(&mut rng)
             .map(|(sk, vk)| (Ed25519SigningKey {sk}, Ed25519PublicKey::new(vk)))
@@ -437,6 +433,7 @@ impl From<libcrux_ecdsa::Error> for Error {
     fn from(err: libcrux_ecdsa::Error) -> Self {
         match err {
             libcrux_ecdsa::Error::InvalidSignature => Error::InvalidSignature,
+            libcrux_ecdsa::Error::RandError => Error::Internal("Randomness generation failed".into()),
             err => Error::Internal(format!("{:?}", err)),
         }
     }
@@ -448,6 +445,12 @@ impl From<libcrux_ed25519::Error> for Error {
             libcrux_ed25519::Error::InvalidSignature => Error::InvalidSignature,
             err => Error::Internal(format!("{:?}", err)),
         }
+    }
+}
+
+impl From<rand::rngs::SysError> for Error {
+    fn from(_: rand::rngs::SysError) -> Self {
+        Error::Internal("RNG init failed".into())
     }
 }
 

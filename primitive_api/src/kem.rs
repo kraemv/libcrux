@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use crate::hkdf::HkdfIkm;
 use crate::provider::get_agent;
 
-use crate::{AgentLib, Implementation, KeyID, Lib, NetworkObject};
+use crate::{AgentLib, Provider, KeyID, Lib, NetworkObject};
 
 use libcrux_agent::kx::SharedKey;
 use libcrux_ml_kem;
@@ -75,12 +75,12 @@ pub enum KemScheme {
     // X25519MlKem768,
 }
 
-pub struct MlKem768PublicKey<Impl: Implementation> {
+pub struct MlKem768PublicKey<Impl: Provider> {
     inner: mlkem768::MlKem768PublicKey,
     marker: PhantomData<Impl>,
 }
 
-impl<Impl: Implementation> MlKem768PublicKey<Impl> {
+impl<Impl: Provider> MlKem768PublicKey<Impl> {
     fn new(pk: mlkem768::MlKem768PublicKey) -> Self {
         Self {
             inner: pk,
@@ -166,15 +166,15 @@ impl EncapsKey for MlKem768PublicKey<Lib> {
 }
 
 impl NetworkObject for MlKem768Ciphertext {}
-impl<Impl: Implementation + Send + Sync> NetworkObject for MlKem768PublicKey<Impl> {}
+impl<Impl: Provider + Send + Sync> NetworkObject for MlKem768PublicKey<Impl> {}
 
-impl<Impl: Implementation> AsRef<[u8]> for MlKem768PublicKey<Impl> {
+impl<Impl: Provider> AsRef<[u8]> for MlKem768PublicKey<Impl> {
     fn as_ref(&self) -> &[u8] {
         self.inner.as_ref()
     }
 }
 
-impl<Impl: Implementation> TryFrom<&[u8]> for MlKem768PublicKey<Impl> {
+impl<Impl: Provider> TryFrom<&[u8]> for MlKem768PublicKey<Impl> {
     type Error = Error;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {

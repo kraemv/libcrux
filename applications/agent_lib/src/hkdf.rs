@@ -13,7 +13,7 @@ pub struct HkdfSha256PRK([u8; 32]);
 pub struct RandomBytes(InnerRndBytes);
 
 impl SharedKey {
-    pub fn sha2_256_hkdf_extract(&self, salt: Option<&[u8]>) -> Result<HkdfSha256PRK, Error> {
+    pub fn sha2_256_extract(&self, salt: Option<&[u8]>) -> Result<HkdfSha256PRK, Error> {
         let salt = salt.unwrap_or(&[0u8; SHA2_256_LEN]);
         let mut prk = [0u8; 32];
         hkdf::Hkdf::<hkdf::Sha2_256>::extract_arrayref(&mut prk, salt, self.as_ref())
@@ -27,7 +27,7 @@ impl HkdfSha256PRK {
         Self(key)
     }
 
-    pub fn sha2_256_hkdf_expand(&self, info: &[u8], outlen: usize) -> Result<RandomBytes, Error> {
+    pub fn sha2_256_expand(&self, info: &[u8], outlen: usize) -> Result<RandomBytes, Error> {
         let mut okm = InnerRndBytes::from_array([0u8; 64]);
         okm.truncate(outlen);
         let okm_ref = okm.get_mut(0..outlen).ok_or(Error::HKDF)?;

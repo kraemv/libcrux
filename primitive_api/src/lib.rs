@@ -9,13 +9,13 @@ pub mod nike;
 mod provider;
 pub mod signature;
 
-pub trait Implementation {}
+pub trait Provider {}
 
 pub struct Lib {}
 pub struct AgentLib {}
 
-impl Implementation for Lib {}
-impl Implementation for AgentLib {}
+impl Provider for Lib {}
+impl Provider for AgentLib {}
 
 pub trait NetworkObject: Send + Sync + AsRef<[u8]> + for<'a> TryFrom<&'a [u8]> {}
 

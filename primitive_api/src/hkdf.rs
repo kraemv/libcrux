@@ -10,7 +10,7 @@ use crate::aead::AEADKey;
 use crate::hash::Hash;
 use crate::mac::AuthenticationKey;
 use crate::provider::get_agent;
-use crate::{AgentLib, Implementation, KeyID, Lib, NetworkObject};
+use crate::{AgentLib, Provider, KeyID, Lib, NetworkObject};
 
 /// HKDF Errors
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -93,21 +93,21 @@ pub trait HKDFKey: Send + Sync + for<'a> TryFrom<&'a [u8]> + ZeroizeOnDrop {
 
 const SHA2_256_SALT: [u8; SHA256_LENGTH] = [0u8; SHA256_LENGTH];
 
-pub struct Hkdf<const N: usize, Algo: Hash<N>, Impl: Implementation>(PhantomData<(Algo, Impl)>);
+pub struct Hkdf<const N: usize, Alg: Hash<N>, Imp: Provider>(PhantomData<(Alg, Imp)>);
 
-pub struct Sha256SaltedHKDF<Impl: Implementation>(Vec<u8>, PhantomData<Impl>);
+pub struct Sha256SaltedHKDF<Imp: Provider>(Vec<u8>, PhantomData<Imp>);
 pub struct Sha256SecretSaltedHKDF(KeyID<RandomKey>);
 
 #[derive(Debug, PartialEq, Eq, ZeroizeOnDrop)]
 pub struct RandomKey(Vec<u8>);
 
-impl<const N: usize, Algo: Hash<N>, Impl: Implementation> Hkdf<N, Algo, Impl> {
+impl<const N: usize, Alg: Hash<N>, Impl: Provider> Hkdf<N, Alg, Impl> {
     pub const fn new() -> Self {
         Self(PhantomData)
     }
 }
 
-impl<const N: usize, Algo: Hash<N>, Impl: Implementation> Default for Hkdf<N, Algo, Impl> {
+impl<const N: usize, Alg: Hash<N>, Imp: Provider> Default for Hkdf<N, Alg, Imp> {
     fn default() -> Self {
         Self::new()
     }
@@ -204,6 +204,7 @@ impl SaltedRandomnessExtractor for Sha256SecretSaltedHKDF {
             .map_err(map_lib_error)
     }
 }
+
 impl HKDFKey for KeyID<Sha256> {
     const N: usize = SHA256_LENGTH;
     type Okm = KeyID<RandomKey>;
@@ -231,7 +232,7 @@ impl HKDFKey for HkdfSha256PRK {
     type Okm = RandomKey;
 
     fn expand(&self, output_len: usize, info: &[u8]) -> Result<Self::Okm, Error> {
-        self.sha2_256_hkdf_expand(info, output_len)
+        self.sha2_256_expand(info, output_len)
             .map(|okm| okm.into_vec())
             .map_err(|_| Error::Expand)
             .map(RandomKey)

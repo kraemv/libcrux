@@ -2,7 +2,7 @@ use crate::hkdf::*;
 use crate::hmac::HmacSha256Key;
 use crate::hmac::HmacSha256Mac;
 use crate::kx::*;
-use crate::signatures::*;
+use crate::signatures::{EcDsaP256PublicKey, EcDsaP256PrivateKey, EcDsaP256Signature, Ed25519PublicKey, Ed25519Signature, Ed25519PrivateKey, SHA256};
 use crate::ID_SIZE;
 use crate::{Error, ID};
 
@@ -34,6 +34,8 @@ const X25519_LABEL: &[u8; 9] = b"X25519Key";
 pub type EphemeralKeyStore = KeyStore<EphemeralKey>;
 pub type LongTermKeyStore = KeyStore<LongTermKey>;
 
+type EcDsaPrivateKey = EcDsaP256PrivateKey<SHA256>;
+
 pub enum EphemeralKey {
     ChaCha20Poly1305(chacha20::Key),
     MlKem768(Arc<MlKem768PrivateKey>),
@@ -46,7 +48,7 @@ pub enum EphemeralKey {
 }
 
 pub enum LongTermKey {
-    EcDsaP256(EcDsaP256PrivateKey<SHA256>),
+    EcDsaP256(EcDsaPrivateKey),
     Ed25519(Ed25519PrivateKey),
 }
 
@@ -256,13 +258,14 @@ impl KeyStore<EphemeralKey> {
         let key = {
             let mut entries = self.entries.write()?;
             match entries.get(id).ok_or(Error::UnknownID)? {
-                EphemeralKey::SharedSecret(_) => entries.remove(id).ok_or(Error::UnknownID),
+                EphemeralKey::SharedSecret(_) => entries.remove(id)
+                    .ok_or(Error::UnknownID),
                 _ => Err(Error::Unsupported),
             }
         }?;
 
         let pseudorandom_key = match key {
-            EphemeralKey::SharedSecret(key) => key.sha2_256_hkdf_extract(Some(salt)),
+            EphemeralKey::SharedSecret(key) => key.sha2_256_extract(Some(salt)),
             _ => Err(Error::Unsupported),
         }?;
 
@@ -293,9 +296,8 @@ impl KeyStore<EphemeralKey> {
                     if matches!(salt, EphemeralKey::RandomBytes(_))
                         {salt.set_hkdf_salt().ok_or(Error::Unsupported)?;}
                     match (key_entry, salt) {
-                        (EphemeralKey::SharedSecret(key), EphemeralKey::HkdfSalt(salt)) => {
-                            key.sha2_256_hkdf_extract(Some(salt.as_ref()))
-                        }
+                        (EphemeralKey::SharedSecret(key), EphemeralKey::HkdfSalt(salt)) => 
+                            key.sha2_256_extract(Some(salt.as_ref())),
                         _ => Err(Error::Unsupported),
                     }
                 }
@@ -319,7 +321,7 @@ impl KeyStore<EphemeralKey> {
                         {key.set_prk().ok_or(Error::Unsupported)?;}
                     match key {
                         EphemeralKey::HkdfSha256(key) => {
-                            key.sha2_256_hkdf_expand(info, output_len)
+                            key.sha2_256_expand(info, output_len)
                         }
                         _ => Err(Error::Unsupported),
                     }
