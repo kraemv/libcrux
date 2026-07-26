@@ -346,7 +346,7 @@ impl KeyStore<EphemeralKey> {
 
 impl KeyStore<LongTermKey> {
     pub fn from_disk() -> Result<Self, Error> {
-        let agent_path = format!("{}/agent", env!("HOME"));
+        let agent_path = format!("{}/agent_dir", env!("HOME"));
         let agent_path = Path::new(&agent_path);
         let root_file = agent_path.join("root_file");
 

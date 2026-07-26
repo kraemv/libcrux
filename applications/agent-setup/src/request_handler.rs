@@ -33,7 +33,7 @@ pub(crate) fn handle_request(request: &IPCSetupRequest) -> Result<IPCSetupRespon
 }
 
 fn agent_paths(id: &ID) -> (PathBuf, PathBuf, PathBuf, String) {
-    let agent_path = PathBuf::from(format!("{}/agent", env!("HOME")));
+    let agent_path = PathBuf::from(format!("{}/agent_dir", env!("HOME")));
     let root_file = agent_path.join("root_file");
     let hex_id = hex::encode(id.as_ref());
     let key_subdir = format!("{:02x}/", id.as_ref()[0]);
@@ -44,7 +44,7 @@ fn agent_paths(id: &ID) -> (PathBuf, PathBuf, PathBuf, String) {
 
 fn init_agent() -> Result<InitResult, Error> {
     // Build directory and root file paths and create directory
-    let agent_path = PathBuf::from(format!("{}/agent", env!("HOME")));
+    let agent_path = PathBuf::from(format!("{}/agent_dir", env!("HOME")));
     let root_file = agent_path.join("root_file");
     fs::create_dir_all(agent_path).map_err(|_| Error::IO)?;
 
