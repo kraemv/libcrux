@@ -236,17 +236,16 @@ impl<'a, Scheme, const NONCE_LEN: usize, const TAG_LEN: usize> TryFrom<&'a [u8]>
 {
     type Error = Error;
 
-    fn try_from(request: &'a [u8]) -> Result<Self, Self::Error> {
-        let (id, req_slice) = ID::try_read_from_prefix(request)?;
+    fn try_from(req: &'a [u8]) -> Result<Self, Self::Error> {
+        let (id, req) = ID::try_read_from_prefix(req)?;
 
-        let (nonce, req_slice) = <[u8; NONCE_LEN]>::try_read_from_prefix(req_slice)?;
+        let (nonce, req) = <[u8; NONCE_LEN]>::try_read_from_prefix(req)?;
 
-        let (tag, req_slice) = <[u8; TAG_LEN]>::try_read_from_prefix(req_slice)?;
+        let (tag, req) = <[u8; TAG_LEN]>::try_read_from_prefix(req)?;
 
-        let (ciphertext_len, req_slice) = usize::try_read_from_prefix(req_slice)?;
+        let (ciphertext_len, req) = usize::try_read_from_prefix(req)?;
 
-        let (ciphertext, aad) = req_slice
-            .split_at_checked(ciphertext_len)
+        let (ciphertext, aad) = req.split_at_checked(ciphertext_len)
             .ok_or(Error::MalformedMessage)?;
 
         Ok(Self {
@@ -272,13 +271,13 @@ impl<'a, Scheme> From<&'a [u8]> for AeadDecryptResponse<'a, Scheme> {
 impl<'a, Scheme, const NONCE_LEN: usize, const TAG_LEN: usize>
     From<AeadDecryptRequest<'a, Scheme, NONCE_LEN, TAG_LEN>> for Vec<u8>
 {
-    fn from(request: AeadDecryptRequest<'a, Scheme, NONCE_LEN, TAG_LEN>) -> Self {
-        let mut result = request.id.as_bytes().to_vec();
-        result.extend(request.nonce.as_bytes());
-        result.extend(request.tag.as_ref());
-        result.extend(request.ciphertext.len().as_bytes());
-        result.extend(request.ciphertext);
-        result.extend(request.aad);
+    fn from(req: AeadDecryptRequest<'a, Scheme, NONCE_LEN, TAG_LEN>) -> Self {
+        let mut result = req.id.as_bytes().to_vec();
+        result.extend(req.nonce.as_bytes());
+        result.extend(req.tag.as_ref());
+        result.extend(req.ciphertext.len().as_bytes());
+        result.extend(req.ciphertext);
+        result.extend(req.aad);
 
         result
     }
