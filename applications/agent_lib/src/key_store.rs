@@ -36,7 +36,7 @@ pub type EphemeralKeyStore = KeyStore<EphemeralKey>;
 pub type LongTermKeyStore = KeyStore<LongTermKey>;
 
 type EcDsaPrivateKey = EcDsaP256PrivateKey<SHA256>;
-type LockedEphemeralKeys<'a> = RwLockWriteGuard<'a, HashMap<ID, EphemeralKey>>;
+type LockedKeys<'a> = RwLockWriteGuard<'a, HashMap<ID, EphemeralKey>>;
 pub enum EphemeralKey {
     ChaCha20Poly1305(chacha20::Key),
     MlKem768(Arc<MlKem768PrivateKey>),
@@ -110,15 +110,13 @@ impl<KeyType> KeyStore<KeyType> {
     fn get_id(&self, bytes: &[u8], label: &[u8]) -> Result<ID, Error> {
         kmac::kmac_128(&mut [0u8; ID_SIZE], &self.root_key, bytes, label)
             .try_into()
-            .map_err(|_| Error::MAC)
     }
 }
 
-fn remove_shared_secret(entries: &mut LockedEphemeralKeys, id: &ID)
--> Result<EphemeralKey, Error> {
-    let key = entries.get(id).ok_or(Error::UnknownID)?;
+fn remove_shk(keys: &mut LockedKeys, id: &ID) -> Result<EphemeralKey, Error> {
+    let key = keys.get(id).ok_or(Error::UnknownID)?;
     let EphemeralKey::SharedSecret(_) = key else {Err(Error::Unsupported)?};
-    entries.remove(id).ok_or(Error::UnknownID)
+    keys.remove(id).ok_or(Error::UnknownID)
 }
 
 impl KeyStore<EphemeralKey> {
@@ -258,7 +256,7 @@ impl KeyStore<EphemeralKey> {
     // ------------------------------------------------
     pub fn sha256_hkdf_extract_public_salt(&self, id: &ID, salt: &[u8])
     -> Result<ID, Error> {
-        let key = {remove_shared_secret(&mut self.entries.write()?, id)?};
+        let key = {remove_shk(&mut self.entries.write()?, id)?};
 
         let EphemeralKey::SharedSecret(key)= key else {Err(Error::Unsupported)?};
         let pseudorandom_key = key.sha2_256_extract(Some(salt))?;
@@ -274,7 +272,7 @@ impl KeyStore<EphemeralKey> {
             let mut entries = self.entries.write()?;
 
             let key = match id {
-                Some(id) => remove_shared_secret(&mut entries, id)?,
+                Some(id) => remove_shk(&mut entries, id)?,
                 None => EphemeralKey::SharedSecret(SharedKey::new([0u8; 32])),
             };
             let EphemeralKey::SharedSecret(key)= key else {Err(Error::Unsupported)?};
